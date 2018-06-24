@@ -34,6 +34,8 @@ from datetime import datetime
 import numpy as np
 from datetime import timedelta
 import time
+import json
+import uuid
 import copy
 import traceback
 from functools import lru_cache
@@ -49,6 +51,8 @@ import pytz
 date_format = '%Y%m%d'
 
 start_date = '20171001'
+#start_date = '20180401'
+
 start_date = datetime.strptime(start_date, date_format)
 
 end_date = '20180530'
@@ -133,85 +137,76 @@ class PhoneStreamsAnalyzer():
         return data
 
 
-    def analyze(self, userid, alldays,config_path):
+    def analyze_all_users(self, userids, alldays, config_path):
+        x = 0
+        for usr in userids:
+            print('Analyzing user %d %s' % (x,usr))
+            self.analyze_user(usr, alldays, config_path) 
+            x += 1
+
+    def analyze_user(self, userid, alldays,config_path):
         self.CC = CerebralCortex(config_path)
         self.window_size = 3600
 
         for day in alldays:
-            current_date = datetime.strptime(day, date_format)
             for phone_stream in phone_input_streams:
+                current_date = datetime.strptime(day, date_format)
                 day_data = self.get_day_data(userid, day, phone_stream)
                 data_quality_analysis = []
                 if len(day_data): 
-                    windowed_day_data = window(day_data, self.window_size, True)
-                    windowed_data_merged = merge_consective_windows(windowed_day_data)
-                    timezone = pytz.timezone(str(windowed_data_merged[0].start_time.tzinfo))
-                    current_date = timezone.localize(current_date)
-                    if (windowed_data_merged[0].start_time -
-                        current_date).seconds > 0:
-                        utc_offset = current_date.utcoffset().total_seconds() * 1000
-                        dp = DataPoint(start_time=current_date,
-                                       end_time=windowed_data_merged[0].start_time,
-                                       offset=utc_offset,
-                                       sample=0)
-                        data_quality_analysis.append(dp)
-
-                    for wdm in windowed_data_merged:
-                        if len(wdm.sample):
-                            window_admission_control_analysis = \
-                                self.apply_admission_control(wdm.sample,
+                    corrupt_data = \
+                                self.get_corrupt_data(day_data,
                                                              phone_input_streams[phone_stream])
                             
-                            if len(window_admission_control_analysis) == len(wdm.sample):
-                                #print('Data is valid')
-                                utc_offset = wdm.start_time.utcoffset().total_seconds() * 1000
-                                dp = DataPoint(start_time=wdm.start_time,
-                                           end_time=wdm.end_time,
+                    utc_offset = day_data[0].start_time.utcoffset().total_seconds() * 1000
+                    dp = DataPoint(start_time=current_date,
+                                           end_time=current_date + timedelta(days=1),
                                            offset=utc_offset,
-                                           sample=1)
-                                data_quality_analysis.append(dp)
-                            else:
-                                print('Data is corrupt')
-                                print(day,userid,phone_stream)
-                                print(wdm.sample)
-                                utc_offset = wdm.start_time.utcoffset().total_seconds() * 1000
-                                dp = DataPoint(start_time=wdm.start_time,
-                                           end_time=wdm.end_time,
-                                           offset=utc_offset,
-                                           sample=-1)
-                                data_quality_analysis.append(dp)
-                                exit(1) # FIXME
-                        else:
-                            dp = DataPoint(start_time=wdm.start_time,
-                                       end_time=wdm.end_time,
-                                       offset=utc_offset,
-                                       sample=0)
-                            data_quality_analysis.append(dp)
+                                           sample=[len(day_data), corrupt_data])
+                    data_quality_analysis.append(dp)
 
-                    next_day = current_date + timedelta(days=1)
-                    if (next_day - windowed_data_merged[-1].end_time).seconds > 0:
-                        utc_offset = current_date.utcoffset().total_seconds() * 1000
-                        dp = DataPoint(start_time=windowed_data_merged[-1].end_time,
-                                       end_time=next_day,
-                                       offset=utc_offset,
-                                       sample=0)
-                        data_quality_analysis.append(dp)
-                    
-                    #print(data_quality_analysis)
                 else:
                     next_day = current_date + timedelta(days=1)
                     utc_offset = 0
                     dp = DataPoint(start_time=current_date,
                                    end_time=next_day,
                                    offset=utc_offset,
-                                   sample=0)
+                                   sample=[0, []])
                     data_quality_analysis.append(dp)
                 
                 # TODO - store the stream
+                mf  = open('phone_input_streams_data_quality.json','r')
+                metadata = mf.read()
+                mf.close()
+                metadata = json.loads(metadata)
+                metadata_name = phone_stream + '_data_quality'
+                output_stream_id = str(uuid.uuid3(uuid.NAMESPACE_DNS, str(
+                      metadata_name + userid + str(metadata))))
+                input_streams = []
+                input_stream_ids = self.CC.get_stream_id(userid, phone_stream)
+                for inpstrm in input_stream_ids:
+                    stream_info = {}
+                    stream_info['name'] = phone_stream
+                    stream_info['identifier'] = inpstrm['identifier']
+                    input_streams.append(stream_info)
+
+                metadata["execution_context"]["processing_module"]["input_streams"] = input_streams
+
+                quality_ds = DataStream(identifier=output_stream_id, owner=userid, 
+                        name=metadata_name, 
+                        data_descriptor= metadata['data_descriptor'], 
+                        execution_context=metadata['execution_context'], 
+                        annotations= metadata['annotations'], 
+                        stream_type=1,
+                        data=data_quality_analysis) 
+                try:
+                    self.CC.save_stream(quality_ds)
+                except Exception as e:
+                    print(e)
 
 
 
-    def apply_admission_control(self, data,
+    def get_corrupt_data(self, data,
                           admission_control = None):
         """
         Return the filtered list of DataPoints according to the admission control provided
@@ -223,16 +218,19 @@ class PhoneStreamsAnalyzer():
         :rtype: List(DataPoint)
         """
         if admission_control is None:
-            return data
-        filtered_data = []
+            return []
+        corrupt_data = []
         for d in data:
-            if admission_control(d.sample):
-                filtered_data.append(d)
-            elif type(d.sample) is list and len(d.sample) == 1 and admission_control(d.sample[0]):
-                d.sample = d.sample[0]
-                filtered_data.append(d)
+            if type(d.sample) is list:
+                if len(d.sample) == 1:
+                    if not admission_control(d.sample[0]):
+                        corrupt_data.append(d)
+                else:
+                    corrupt_data.append(d)
+            elif not admission_control(d.sample):
+                corrupt_data.append(d)
 
-        return filtered_data
+        return corrupt_data
 
 
 
@@ -244,7 +242,17 @@ while True:
     if start_date > end_date : break
 
 
-userid = ['c6156900-915c-43bd-a1c4-37d9c1f8da62']
+userids = []
+f = open('users.txt','r')
+usrs = f.read()
+userids = usrs.split(',')
+userids = [x.strip() for x in userids]
+
+#userids = ['20940a76-976b-446e-b173-89237835ae6b']
+
+#  20180401 20940a76-976b-446e-b173-89237835ae6b
+
+print("Number of users ",len(userids))
 
 psa = PhoneStreamsAnalyzer()
-psa.analyze(userid[0], all_days, CC_CONFIG_FILEPATH)
+psa.analyze_all_users(userids, all_days, CC_CONFIG_FILEPATH)
