@@ -44,11 +44,16 @@ def battery_marker(raw_stream_ids: uuid, stream_name: str, owner_id, dd_stream_n
     :param CC:
     :param config:
     """
+
+    # using stream_id, data-diagnostic-stream-id, and owner id to generate a unique stream ID for battery-marker
+    battery_marker_stream_id = uuid.uuid3(uuid.NAMESPACE_DNS, str(raw_stream_ids[0] + dd_stream_name + owner_id + "BATTERY MARKER"))
+    input_streams = [{"owner_id": owner_id, "id": raw_stream_ids, "name": stream_name}]
+    output_stream = {"id": battery_marker_stream_id, "name": dd_stream_name,
+                     "algo_type": config["algo_type"]["battery_marker"]}
+    metadata = get_metadata(dd_stream_name, input_streams, config)
+
     if isinstance(raw_stream_ids, list):
         for raw_stream_id in raw_stream_ids:
-
-            # using stream_id, data-diagnostic-stream-id, and owner id to generate a unique stream ID for battery-marker
-            battery_marker_stream_id = uuid.uuid3(uuid.NAMESPACE_DNS, str(raw_stream_id + dd_stream_name + owner_id + "BATTERY MARKER"))
 
             stream_days = CC.get_stream_days(raw_stream_id, battery_marker_stream_id, CC)
 
@@ -62,11 +67,7 @@ def battery_marker(raw_stream_ids: uuid, stream_name: str, owner_id, dd_stream_n
 
                         merged_windows = merge_consective_windows(results)
                         if len(merged_windows) > 0:
-                            input_streams = [{"owner_id": owner_id, "id": str(raw_stream_id), "name": stream_name}]
-                            output_stream = {"id": battery_marker_stream_id, "name": dd_stream_name,
-                                             "algo_type": config["algo_type"]["battery_marker"]}
                             labelled_windows = mark_windows(battery_marker_stream_id, merged_windows, CC, config)
-                            metadata = get_metadata(dd_stream_name, input_streams, config)
                             store(labelled_windows, input_streams, output_stream, metadata, CC, config)
                 except Exception as e:
                     CC.logging.log("Error processing: owner-id: %s, stream-id: %s, stream-name: %s, day: %s. Error: "

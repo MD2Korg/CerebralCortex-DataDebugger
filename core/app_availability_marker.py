@@ -47,12 +47,16 @@ def mobile_app_availability_marker(raw_stream_ids: uuid, stream_name: str, owner
     :param CC:
     :param config:
     """
+    # using stream_id, data-diagnostic-stream-id, and owner id to generate a unique stream ID for battery-marker
+    app_availability_marker_stream_id = uuid.uuid3(uuid.NAMESPACE_DNS, str(
+        raw_stream_ids[0] + dd_stream_name + owner_id + "MOBILE APP AVAILABILITY MARKER"))
+    input_streams = [{"owner_id": owner_id, "id": raw_stream_ids, "name": stream_name}]
+    output_stream = {"id": app_availability_marker_stream_id, "name": dd_stream_name,
+                     "algo_type": config["algo_type"]["app_availability_marker"]}
+    metadata = get_metadata(dd_stream_name, input_streams, config)
+
     if isinstance(raw_stream_ids, list):
         for raw_stream_id in raw_stream_ids:
-
-            # using stream_id, data-diagnostic-stream-id, and owner id to generate a unique stream ID for battery-marker
-            app_availability_marker_stream_id = uuid.uuid3(uuid.NAMESPACE_DNS, str(
-                raw_stream_id + dd_stream_name + owner_id + "MOBILE APP AVAILABILITY MARKER"))
 
             stream_days = CC.get_stream_days(raw_stream_id, app_availability_marker_stream_id, CC)
 
@@ -65,10 +69,6 @@ def mobile_app_availability_marker(raw_stream_ids: uuid, stream_name: str, owner
 
                         merged_windows = merge_consective_windows(results)
                         if len(merged_windows) > 0:
-                            input_streams = [{"owner_id": owner_id, "id": str(raw_stream_id), "name": stream_name}]
-                            output_stream = {"id": app_availability_marker_stream_id, "name": dd_stream_name,
-                                             "algo_type": config["algo_type"]["app_availability_marker"]}
-                            metadata = get_metadata(dd_stream_name, input_streams, config)
                             store(merged_windows, input_streams, output_stream, metadata, CC, config)
 
                 except Exception as e:

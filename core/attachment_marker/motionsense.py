@@ -43,6 +43,10 @@ def attachment_marker(raw_stream_ids: uuid, stream_name: str, owner_id: uuid, dd
     # TODO: quality streams could be multiple so find the one computed with CC
     # using stream_id, data-diagnostic-stream-id, and owner id to generate a unique stream ID for battery-marker
     attachment_marker_stream_id = uuid.uuid3(uuid.NAMESPACE_DNS, str(raw_stream_ids[0] + dd_stream_name + owner_id+"ATTACHMENT MARKER"))
+    input_streams = [{"owner_id": owner_id, "id": raw_stream_ids, "name": stream_name}]
+    output_stream = {"id": attachment_marker_stream_id, "name": dd_stream_name,
+                     "algo_type": config["algo_type"]["attachment_marker"]}
+    metadata = get_metadata(dd_stream_name, input_streams, config)
 
     if isinstance(raw_stream_ids, list):
         for raw_stream_id in raw_stream_ids:
@@ -58,10 +62,6 @@ def attachment_marker(raw_stream_ids: uuid, stream_name: str, owner_id: uuid, dd
                         results = process_windows(windowed_data, config)
                         merged_windows = merge_consective_windows(results)
 
-                        input_streams = [{"owner_id": owner_id, "id": str(raw_stream_id), "name": stream_name}]
-                        output_stream = {"id": attachment_marker_stream_id, "name": dd_stream_name,
-                                         "algo_type": config["algo_type"]["attachment_marker"]}
-                        metadata = get_metadata(dd_stream_name, input_streams, config)
                         store(merged_windows, input_streams, output_stream, metadata, CC, config)
                 except Exception as e:
                     CC.logging.log("Error processing: owner-id: %s, stream-id: %s, stream-name: %s, day: %s. Error: "

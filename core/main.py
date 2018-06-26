@@ -120,6 +120,7 @@ def diagnose_streams(user_id: uuid, CC: CerebralCortex, config: dict):
             if config["stream_names"]["motionsense_hrv_gyro_right"]:
                 sensor_failure_marker(
                     streams[config["stream_names"]["motionsense_hrv_right_attachment_marker"]]["stream_ids"],
+                    streams[config["stream_names"]["motionsense_hrv_right_attachment_marker"]]["name"],
                     streams[config["stream_names"]["motionsense_hrv_accel_right"]]["stream_ids"],
                     streams[config["stream_names"]["motionsense_hrv_gyro_right"]]["stream_ids"],
                     "right", user_id,
@@ -133,6 +134,7 @@ def diagnose_streams(user_id: uuid, CC: CerebralCortex, config: dict):
             if config["stream_names"]["motionsense_hrv_gyro_left"]:
                 sensor_failure_marker(
                     streams[config["stream_names"]["motionsense_hrv_left_attachment_marker"]]["stream_ids"],
+                    streams[config["stream_names"]["motionsense_hrv_right_attachment_marker"]]["name"],
                     streams[config["stream_names"]["motionsense_hrv_accel_left"]]["stream_ids"],
                     streams[config["stream_names"]["motionsense_hrv_gyro_left"]]["stream_ids"],
                     "left", user_id,

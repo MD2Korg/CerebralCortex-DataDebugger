@@ -45,7 +45,10 @@ def packet_loss_marker(raw_stream_ids: uuid, stream_name: str, owner_id: uuid, d
 
     # using stream_id, data-diagnostic-stream-id, and owner id to generate a unique stream ID for battery-marker
     packetloss_marker_stream_id = uuid.uuid3(uuid.NAMESPACE_DNS, str(raw_stream_ids[0] + dd_stream_name + owner_id+"PACKET LOSS MARKER"))
-
+    input_streams = [{"owner_id": owner_id, "id": raw_stream_ids, "name": stream_name}]
+    output_stream = {"id": packetloss_marker_stream_id, "name": dd_stream_name,
+                     "algo_type": config["algo_type"]["packet_loss_marker"]}
+    metadata = get_metadata(dd_stream_name, input_streams, config)
 
 
     if stream_name == config["stream_names"]["autosense_ecg"]:
@@ -82,10 +85,6 @@ def packet_loss_marker(raw_stream_ids: uuid, stream_name: str, owner_id: uuid, d
                         results = process_windows(windowed_data, sampling_rate, threshold_val, label, config)
                         merged_windows = merge_consective_windows(results)
                         if len(merged_windows) > 0:
-                            input_streams = [{"owner_id": owner_id, "id": str(raw_stream_id), "name": stream_name}]
-                            output_stream = {"id": packetloss_marker_stream_id, "name": dd_stream_name,
-                                             "algo_type": config["algo_type"]["packet_loss_marker"]}
-                            metadata = get_metadata(dd_stream_name, input_streams, config)
                             store(merged_windows, input_streams, output_stream, metadata, CC, config)
             except Exception as e:
                 CC.logging.log("Error processing: owner-id: %s, stream-id: %s, stream-name: %s, day: %s. Error: "

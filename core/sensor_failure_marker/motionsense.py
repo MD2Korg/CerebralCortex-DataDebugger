@@ -37,7 +37,7 @@ from cerebralcortex.core.datatypes.datapoint import DataPoint
 from cerebralcortex.core.data_manager.raw.stream_handler import DataSet
 
 
-def sensor_failure_marker(raw_stream_ids: uuid, mshrv_accel_id: uuid, mshrv_gyro_id: uuid, wrist: str,
+def sensor_failure_marker(raw_stream_ids: uuid, stream_name:str, mshrv_accel_id: uuid, mshrv_gyro_id: uuid, wrist: str,
                           owner_id: uuid, dd_stream_name, CC: CerebralCortex, config: dict):
     """
     Label a window as packet-loss if received packets are less than the expected packets.
@@ -50,7 +50,11 @@ def sensor_failure_marker(raw_stream_ids: uuid, mshrv_accel_id: uuid, mshrv_gyro
     # using stream_id, data-diagnostic-stream-id, and owner id to generate a unique stream ID for battery-marker
     sensor_failure_stream_id = uuid.uuid3(uuid.NAMESPACE_DNS, str(
         raw_stream_ids[0] + dd_stream_name + owner_id + "SENSOR FAILURE MARKER"))
-
+    input_streams = [{"owner_id": owner_id, "id": raw_stream_ids,
+                      "name": stream_name}]
+    output_stream = {"id": sensor_failure_stream_id, "name": dd_stream_name,
+                     "algo_type": config["algo_type"]["sensor_failure"]}
+    metadata = get_metadata(dd_stream_name, input_streams, config)
 
 
     if isinstance(raw_stream_ids, list):
@@ -84,14 +88,8 @@ def sensor_failure_marker(raw_stream_ids: uuid, mshrv_accel_id: uuid, mshrv_gyro
                                 sample = "MOTIONSENE-HRV-" + str(wrist) + "GYRO-FAILURE"
                                 results[key].append(DataPoint(marker_window.start_time, marker_window.end_time, sample))
 
-                            merged_windows = merge_consective_windows(results)
-
                         if len(results) > 0:
-                            input_streams = [{"owner_id": owner_id, "id": str(raw_stream_id),
-                                              "name": attachment_marker_stream.name}]
-                            output_stream = {"id": sensor_failure_stream_id, "name": dd_stream_name,
-                                             "algo_type": config["algo_type"]["sensor_failure"]}
-                            metadata = get_metadata(dd_stream_name, input_streams, config)
+                            merged_windows = merge_consective_windows(results)
                             store(merged_windows, input_streams, output_stream, metadata, CC, config)
                 except Exception as e:
                     CC.logging.log("Error processing: owner-id: %s, stream-id: %s, Algo-name: %s, day: %s. Error: "
