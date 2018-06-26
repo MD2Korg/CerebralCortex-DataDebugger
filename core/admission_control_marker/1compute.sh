@@ -28,7 +28,7 @@ SPARK_MASTER="spark://dagobah10dot.memphis.edu:7077"
 
 CC_EGG="/cerebralcortex/code/eggs/MD2K_Cerebral_Cortex-2.2.2-py3.6.egg"
 
-PY_FILES=${CC_EGG}",dist/MD2K_Cerebral_Cortex_DataAnalysis_compute_features-2.2.1-py3.6.egg"
+PY_FILES=${CC_EGG} #",dist/MD2K_Cerebral_Cortex_DataAnalysis_compute_features-2.2.1-py3.6.egg"
 
 
 SPARK_UI_PORT=4066
@@ -40,7 +40,7 @@ SPARK_JOB="True"
 
 # build before executing
 
-python3.6 setup.py bdist_egg
+# python3.6 setup.py bdist_egg
 
 if [ $SPARK_JOB == 'True' ]
     then
@@ -48,17 +48,14 @@ if [ $SPARK_JOB == 'True' ]
         spark-submit --master $SPARK_MASTER \
                      --conf spark.ui.port=$SPARK_UI_PORT \
                      --conf spark.cores.max=$MAX_CORES \
-                     --conf spark.app.name=$FEATURES \
+                     --conf spark.app.name='data_quality' \
                      --py-files $PY_FILES \
-                     core/driver.py -c $CC_CONFIG_FILEPATH \
-                     -s $STUDY_NAME -sd $START_DATE \
-                     -ed $END_DATE -u $USERIDS -f $FEATURES \
-                     -p $MAX_CORES
+                     phone_stream_analyzer.py
     else
         echo 'Executing single threaded'
         export PYTHONPATH=.:${CC_EGG}:$PYTHONPATH
         echo $PYTHONPATH
-        python3.6 core/driver.py -c $CC_CONFIG_FILEPATH \
+        python3.6 phone_stream_analyzer -c $CC_CONFIG_FILEPATH \
                        -s $STUDY_NAME -sd $START_DATE \
                        -ed $END_DATE -u $USERIDS -f $FEATURES 
 

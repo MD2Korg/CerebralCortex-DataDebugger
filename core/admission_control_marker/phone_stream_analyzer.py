@@ -28,39 +28,22 @@ from cerebralcortex.core.datatypes.datastream import DataPoint
 from cerebralcortex.core.datatypes.stream_types import StreamTypes
 #from core.computefeature import ComputeFeatureBase
 
-from urllib.request import urlopen
-from bs4 import BeautifulSoup
-from datetime import datetime
-import numpy as np
+from random import shuffle
 from datetime import timedelta
+from datetime import datetime
 import time
 import json
 import uuid
-import copy
 import traceback
-from functools import lru_cache
-import math
 import base64
 import pickle
 from cerebralcortex.cerebralcortex import CerebralCortex
 from cerebralcortex.core.util.spark_helper import get_or_create_sc
-from window import window
-from window import merge_consective_windows
 import pytz
 
-date_format = '%Y%m%d'
-
-start_date = '20171001'
-#start_date = '20180401'
-
-start_date = datetime.strptime(start_date, date_format)
-
-end_date = '20180530'
-end_date = datetime.strptime(end_date, date_format)
-CC_CONFIG_FILEPATH="/cerebralcortex/code/config/cc_starwars_configuration.yml"
 # Below are the 'raw' ingested input streams that phone_features uses.
 phone_input_streams = {}
-
+"""
 call_stream_name = 'CU_CALL_DURATION--edu.dartmouth.eureka'
 call_stream_admission_control = lambda x: (type(x) is float and x >= 0)
 phone_input_streams[call_stream_name] = call_stream_admission_control
@@ -92,18 +75,20 @@ phone_input_streams[call_number_stream_name] = call_number_stream_admission_cont
 sms_number_stream_name = "CU_SMS_NUMBER--edu.dartmouth.eureka"
 sms_number_stream_admission_control = lambda x: (type(x) is str)
 phone_input_streams[sms_number_stream_name] = sms_number_stream_admission_control
+"""
 
 activity_stream_name = "ACTIVITY_TYPE--org.md2k.phonesensor--PHONE"
 activity_stream_admission_control = lambda x: (type(x) is list and len(x) == 2)
 phone_input_streams[activity_stream_name] = activity_stream_admission_control
-
+"""
 call_type_stream_name = "CU_CALL_TYPE--edu.dartmouth.eureka"
 call_type_stream_admission_control = lambda x: (type(x) is float)
 phone_input_streams[call_type_stream_name] = call_type_stream_admission_control
 
 sms_type_stream_name = "CU_SMS_TYPE--edu.dartmouth.eureka"
 sms_type_stream_admission_control = lambda x: (type(x) is float)
-phone_input_streams[call_type_stream_name] = sms_type_stream_admission_control
+phone_input_streams[sms_type_stream_name] = sms_type_stream_admission_control
+"""
 
 
 
@@ -145,9 +130,47 @@ class PhoneStreamsAnalyzer():
             x += 1
 
     def analyze_user(self, userid, alldays,config_path):
+        print(userid,alldays)
         self.CC = CerebralCortex(config_path)
         self.window_size = 3600
+        metadata = """
+        {
+          "annotations":[],
+          "data_descriptor":[
+            {
+              "name":"total_datapoints",
+              "type":"int",
+              "description":"Total number of data points that are present in the input stream followed by an array of the corrupt datapoints",
+              "stream_type": "sparse"
+            }
+          ],
+          "execution_context":{
+            "processing_module":{
+              "name":"core.admission_control_marker.phone_stream_analyzer",
+              "input_streams":[
+                {
+                  "name":"name",
+                  "identifier" : "id"
+                }
+              ]
+            },
+            "algorithm":{
+              "method":"core.admission_control_marker",
+              "authors":[
+                {
+                  "name":"Anand",
+                  "email":"nndugudi@memphis.edu"
+                }
+              ],
+              "version":"0.0.1",
+              "description":"Analyzer for the phone input streams"
+            }
+          },
+          "name":"NAME_dynamically_generated"
+        }
+        """
 
+        date_format = '%Y%m%d'
         for day in alldays:
             for phone_stream in phone_input_streams:
                 current_date = datetime.strptime(day, date_format)
@@ -175,10 +198,10 @@ class PhoneStreamsAnalyzer():
                     data_quality_analysis.append(dp)
                 
                 # TODO - store the stream
-                mf  = open('phone_input_streams_data_quality.json','r')
-                metadata = mf.read()
-                mf.close()
-                metadata = json.loads(metadata)
+                #mf  = open('phone_input_streams_data_quality.json','r')
+                #metadata = mf.read()
+                #mf.close()
+                metadata_json = json.loads(metadata)
                 metadata_name = phone_stream + '_data_quality'
                 output_stream_id = str(uuid.uuid3(uuid.NAMESPACE_DNS, str(
                       metadata_name + userid + str(metadata))))
@@ -190,13 +213,13 @@ class PhoneStreamsAnalyzer():
                     stream_info['identifier'] = inpstrm['identifier']
                     input_streams.append(stream_info)
 
-                metadata["execution_context"]["processing_module"]["input_streams"] = input_streams
+                metadata_json["execution_context"]["processing_module"]["input_streams"] = input_streams
 
                 quality_ds = DataStream(identifier=output_stream_id, owner=userid, 
                         name=metadata_name, 
-                        data_descriptor= metadata['data_descriptor'], 
-                        execution_context=metadata['execution_context'], 
-                        annotations= metadata['annotations'], 
+                        data_descriptor= metadata_json['data_descriptor'], 
+                        execution_context=metadata_json['execution_context'], 
+                        annotations= metadata_json['annotations'], 
                         stream_type=1,
                         data=data_quality_analysis) 
                 try:
@@ -222,37 +245,85 @@ class PhoneStreamsAnalyzer():
         corrupt_data = []
         for d in data:
             if type(d.sample) is list:
-                if len(d.sample) == 1:
-                    if not admission_control(d.sample[0]):
+                if not admission_control(d.sample):
+                    if len(d.sample) == 1:
+                        if not admission_control(d.sample[0]):
+                            corrupt_data.append(d)
+                    else:
                         corrupt_data.append(d)
-                else:
-                    corrupt_data.append(d)
             elif not admission_control(d.sample):
                 corrupt_data.append(d)
 
         return corrupt_data
 
 
+def analyze_user_day(userid, all_days, CC_CONFIG_FILEPATH):
+    print(userid,all_days,datetime.now())
+    try:
+        psa = PhoneStreamsAnalyzer()
+        psa.analyze_user(userid, all_days, CC_CONFIG_FILEPATH)
+    except Exception as e:
+        print(e)
+
+    print(userid,all_days,datetime.now())
+
+def main():
+    date_format = '%Y%m%d'
+
+    start_date = '20171001'
+    #start_date = '20180401'
+    start_date = datetime.strptime(start_date, date_format)
+    end_date = '20180530'
+    end_date = datetime.strptime(end_date, date_format)
+    CC_CONFIG_FILEPATH="/cerebralcortex/code/config/cc_starwars_configuration.yml"
+
+    all_days = []
+    while True:
+        all_days.append(start_date.strftime(date_format))
+        start_date += timedelta(days = 1)
+        if start_date > end_date : break
 
 
-all_days = []
-while True:
-    all_days.append(start_date.strftime(date_format))
-    start_date += timedelta(days = 1)
-    if start_date > end_date : break
+    userids = []
+    f = open('users.txt','r')
+    usrs = f.read()
+    userids = usrs.split(',')
+    userids = [x.strip() for x in userids]
+    f.close()
+
+    #userids = ['20940a76-976b-446e-b173-89237835ae6b']
+
+    #  20180401 20940a76-976b-446e-b173-89237835ae6b
+
+    print("Number of users ",len(userids))
+    num_cores = 24
 
 
-userids = []
-f = open('users.txt','r')
-usrs = f.read()
-userids = usrs.split(',')
-userids = [x.strip() for x in userids]
 
-#userids = ['20940a76-976b-446e-b173-89237835ae6b']
+    useSpark = True
+    if useSpark:
+        spark_context = get_or_create_sc(type="sparkContext")
+        parallelize_per_day = []
+        for usr in userids:
+            for day in all_days:
+                parallelize_per_day.append((usr,[day]))
 
-#  20180401 20940a76-976b-446e-b173-89237835ae6b
+        shuffle(parallelize_per_day)
+        print(len(parallelize_per_day))
+        rdd = spark_context.parallelize(parallelize_per_day, num_cores)
+        try:
+            results = rdd.map(
+                lambda user_day: analyze_user_day(user_day[0],
+                                               user_day[1], 
+                                               CC_CONFIG_FILEPATH))
+            results.count()
 
-print("Number of users ",len(userids))
+            spark_context.stop()
+        except Exception as e:
+            print(e)
+    else:
+        analyze_user_day(userids[0],all_days[:2], 
+                                               CC_CONFIG_FILEPATH)
+if __name__ == '__main__':
+    main()
 
-psa = PhoneStreamsAnalyzer()
-psa.analyze_all_users(userids, all_days, CC_CONFIG_FILEPATH)
