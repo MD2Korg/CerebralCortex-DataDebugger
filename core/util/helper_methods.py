@@ -32,40 +32,7 @@ import json
 import uuid
 from datetime import timedelta
 import numpy as np
-from cerebralcortex.cerebralcortex import CerebralCortex
 from cerebralcortex.core.datatypes.datapoint import DataPoint
-
-
-def merge_consective_windows(data: OrderedDict) -> List[DataPoint]:
-    """
-    Merge two or more windows if the time difference between them is 0
-    :param data:
-    :return:
-    """
-    merged_windows = []
-    element = None
-    start = None
-    end = None
-    val = None
-    if data:
-        for key, val in data.items():
-            if element is None:
-                element = val
-                start = key[0]
-                end = key[1]
-            elif element == val and (end == key[0]):
-                element = val
-                end = key[1]
-            else:
-                merged_windows.append(DataPoint(start, end, element))  # [(export_data, end)] = element
-                element = val
-                start = key[0]
-                end = key[1]
-        if val is not None:
-            merged_windows.append(DataPoint(start, end, val))  # merged_windows[(export_data, end)] = val
-
-    return merged_windows
-
 
 def outlier_detection(window_data: list) -> list:
     """
@@ -90,24 +57,6 @@ def outlier_detection(window_data: list) -> list:
             normal_values.append(float(val.sample))
 
     return normal_values
-
-
-def get_stream_days(raw_stream_id: uuid, dd_stream_id: uuid, CC: CerebralCortex) -> List:
-    """
-    Returns a list of days (string format: YearMonthDay (e.g., 20171206)
-    :param raw_stream_id:
-    :param dd_stream_id:
-    """
-    dd_stream_days = CC.get_stream_duration(dd_stream_id)["end_time"]
-
-    if not dd_stream_days:
-        stream_days = CC.get_stream_duration(raw_stream_id)
-        days = stream_days["end_time"]-stream_days["start_time"]
-        for day in range(days.days+1):
-            stream_days.append((stream_days["start_time"]+timedelta(days=day)).strftime('%Y%m%d'))
-    else:
-        stream_days = [(dd_stream_days+timedelta(days=1)).strftime('%Y%m%d')]
-    return stream_days
 
 
 def magnitude_datapoints(data: DataPoint) -> List:

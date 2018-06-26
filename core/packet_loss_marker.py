@@ -27,15 +27,13 @@ import uuid
 from collections import OrderedDict
 
 from cerebralcortex.cerebralcortex import CerebralCortex
-from modules.mdebugger.post_processing import get_execution_context, get_annotations
-from modules.mdebugger.post_processing import store
-from modules.mdebugger.util import get_stream_days
-from modules.mdebugger.util import merge_consective_windows
-from core.signalprocessing.window import window
+from core.post_processing import get_execution_context, get_annotations
+from core.post_processing import store
+from core.util.window import merge_consective_windows, window
 from cerebralcortex.core.data_manager.raw.stream_handler import DataSet
 
 
-def packet_loss_marker(raw_stream_id: uuid, stream_name: str, owner_id: uuid, dd_stream_name, CC: CerebralCortex,
+def packet_loss_marker(raw_stream_ids: uuid, stream_name: str, owner_id: uuid, dd_stream_name, CC: CerebralCortex,
                        config: dict):
     """
     Label a window as packet-loss if received packets are less than the expected packets.
@@ -46,9 +44,9 @@ def packet_loss_marker(raw_stream_id: uuid, stream_name: str, owner_id: uuid, dd
     """
 
     # using stream_id, data-diagnostic-stream-id, and owner id to generate a unique stream ID for battery-marker
-    packetloss_marker_stream_id = uuid.uuid3(uuid.NAMESPACE_DNS, str(raw_stream_id + dd_stream_name + owner_id+"PACKET LOSS MARKER"))
+    packetloss_marker_stream_id = uuid.uuid3(uuid.NAMESPACE_DNS, str(raw_stream_ids[0] + dd_stream_name + owner_id+"PACKET LOSS MARKER"))
 
-    stream_days = get_stream_days(raw_stream_id, packetloss_marker_stream_id, CC)
+
 
     if stream_name == config["stream_names"]["autosense_ecg"]:
         sampling_rate = config["sampling_rate"]["ecg"]
@@ -69,22 +67,29 @@ def packet_loss_marker(raw_stream_id: uuid, stream_name: str, owner_id: uuid, dd
         threshold_val = config["packet_loss_marker"]["motionsense_gyro_acceptable_packet_loss"]
         label = config["labels"]["motionsense_gyro_packet_loss"]
 
-    for day in stream_days:
-        # load stream data to be diagnosed
-        stream = CC.get_stream(raw_stream_id, day=day, data_type=DataSet.COMPLETE)
+    if isinstance(raw_stream_ids, list):
+        for raw_stream_id in raw_stream_ids:
+            try:
+                stream_days = CC.get_stream_days(raw_stream_id, packetloss_marker_stream_id, CC)
+                for day in stream_days:
+                    # load stream data to be diagnosed
+                    stream = CC.get_stream(raw_stream_id, day=day, data_type=DataSet.COMPLETE)
 
-        if len(stream.data) > 0:
+                    if len(stream.data) > 0:
 
-            windowed_data = window(stream.data, config['general']['window_size'], True)
+                        windowed_data = window(stream.data, config['general']['window_size'], True)
 
-            results = process_windows(windowed_data, sampling_rate, threshold_val, label, config)
-            merged_windows = merge_consective_windows(results)
-            if len(merged_windows) > 0:
-                input_streams = [{"owner_id": owner_id, "id": str(raw_stream_id), "name": stream_name}]
-                output_stream = {"id": packetloss_marker_stream_id, "name": dd_stream_name,
-                                 "algo_type": config["algo_type"]["packet_loss_marker"]}
-                metadata = get_metadata(dd_stream_name, input_streams, config)
-                store(merged_windows, input_streams, output_stream, metadata, CC, config)
+                        results = process_windows(windowed_data, sampling_rate, threshold_val, label, config)
+                        merged_windows = merge_consective_windows(results)
+                        if len(merged_windows) > 0:
+                            input_streams = [{"owner_id": owner_id, "id": str(raw_stream_id), "name": stream_name}]
+                            output_stream = {"id": packetloss_marker_stream_id, "name": dd_stream_name,
+                                             "algo_type": config["algo_type"]["packet_loss_marker"]}
+                            metadata = get_metadata(dd_stream_name, input_streams, config)
+                            store(merged_windows, input_streams, output_stream, metadata, CC, config)
+            except Exception as e:
+                CC.logging.log("Error processing: owner-id: %s, stream-id: %s, stream-name: %s, day: %s. Error: "
+                               %(str(owner_id), str(raw_stream_id), str(stream_name), str(day), str(e)))
 
 
 def process_windows(windowed_data: OrderedDict, sampling_rate: float, threshold_val: float, label: str,
