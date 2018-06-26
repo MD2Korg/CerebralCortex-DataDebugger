@@ -74,33 +74,34 @@ def all_users_data(study_name: str, md_config, CC, spark_context):
         print(study_name, "- study has 0 users.")
 
 
-def diagnose_streams(user_id: uuid, CC: CerebralCortex, config: dict):
+def diagnose_streams(owner_id: uuid, CC: CerebralCortex, config: dict):
     """
     Contains pipeline execution of all the diagnosis algorithms
-    :param user_id:
+    :param owner_id:
     :param CC:
     :param config:
     """
 
     # get all the streams belong to a participant
-    streams = CC.get_user_streams(user_id)
+    streams = CC.get_user_streams(owner_id)
     if streams and len(streams) > 0:
 
         # phone battery
+        battery_marker(streams, owner_id, config["stream_names"]["phone_battery"], CC, config)
+        battery_marker(streams, owner_id, config["stream_names"]["autosense_battery"], CC, config)
+
         if config["stream_names"]["phone_battery"] in streams:
-            battery_marker(streams[config["stream_names"]["phone_battery"]]["stream_ids"],
-                           streams[config["stream_names"]["phone_battery"]]["name"], user_id,
-                           config["stream_names"]["phone_battery_marker"], CC, config)
+
 
             # mobile phone availability marker
             mobile_app_availability_marker(streams[config["stream_names"]["phone_battery"]]["stream_ids"],
-                                           streams[config["stream_names"]["phone_battery"]]["name"], user_id,
+                                           streams[config["stream_names"]["phone_battery"]]["name"], owner_id,
                                            config["stream_names"]["app_availability_marker"], CC, config)
 
         # autosense battery
         if config["stream_names"]["autosense_battery"] in streams:
             battery_marker(streams[config["stream_names"]["autosense_battery"]]["stream_ids"],
-                           streams[config["stream_names"]["autosense_battery"]]["name"], user_id,
+                           streams[config["stream_names"]["autosense_battery"]]["name"], owner_id,
                            config["stream_names"]["autosense_battery_marker"], CC, config)
 
         # TODO: Motionsense battery values are not available.
@@ -123,11 +124,11 @@ def diagnose_streams(user_id: uuid, CC: CerebralCortex, config: dict):
                     streams[config["stream_names"]["motionsense_hrv_right_attachment_marker"]]["name"],
                     streams[config["stream_names"]["motionsense_hrv_accel_right"]]["stream_ids"],
                     streams[config["stream_names"]["motionsense_hrv_gyro_right"]]["stream_ids"],
-                    "right", user_id,
+                    "right", owner_id,
                     config["stream_names"]["motionsense_hrv_right_sensor_failure_marker"], CC, config)
 
             ms_wd(streams[config["stream_names"]["motionsense_hrv_accel_right"]]["stream_ids"],
-                  streams[config["stream_names"]["motionsense_hrv_accel_right"]]["name"], user_id,
+                  streams[config["stream_names"]["motionsense_hrv_accel_right"]]["name"], owner_id,
                   config["stream_names"]["motionsense_hrv_right_wireless_marker"], phone_physical_activity, CC, config)
 
         if config["stream_names"]["motionsense_hrv_accel_left"] in streams:
@@ -137,47 +138,47 @@ def diagnose_streams(user_id: uuid, CC: CerebralCortex, config: dict):
                     streams[config["stream_names"]["motionsense_hrv_right_attachment_marker"]]["name"],
                     streams[config["stream_names"]["motionsense_hrv_accel_left"]]["stream_ids"],
                     streams[config["stream_names"]["motionsense_hrv_gyro_left"]]["stream_ids"],
-                    "left", user_id,
+                    "left", owner_id,
                     config["stream_names"]["motionsense_hrv_left_sensor_failure_marker"], CC, config)
 
             ms_wd(streams[config["stream_names"]["motionsense_hrv_accel_left"]]["stream_ids"],
-                  streams[config["stream_names"]["motionsense_hrv_accel_left"]]["name"], user_id,
+                  streams[config["stream_names"]["motionsense_hrv_accel_left"]]["name"], owner_id,
                   config["stream_names"]["motionsense_hrv_left_wireless_marker"], phone_physical_activity, CC, config)
 
         ### Attachment marker
         if config["stream_names"]["motionsense_hrv_led_quality_right"] in streams:
             ms_attachment_marker(streams[config["stream_names"]["motionsense_hrv_led_quality_right"]]["stream_ids"],
                                  streams[config["stream_names"]["motionsense_hrv_led_quality_right"]]["name"],
-                                 user_id, config["stream_names"]["motionsense_hrv_right_attachment_marker"], CC,
+                                 owner_id, config["stream_names"]["motionsense_hrv_right_attachment_marker"], CC,
                                  config)
         if config["stream_names"]["motionsense_hrv_led_quality_left"] in streams:
             ms_attachment_marker(streams[config["stream_names"]["motionsense_hrv_led_quality_left"]]["stream_ids"],
                                  streams[config["stream_names"]["motionsense_hrv_led_quality_left"]]["name"],
-                                 user_id, config["stream_names"]["motionsense_hrv_left_attachment_marker"], CC,
+                                 owner_id, config["stream_names"]["motionsense_hrv_left_attachment_marker"], CC,
                                  config)
 
         ### Packet-loss marker
         if config["stream_names"]["motionsense_hrv_accel_right"] in streams:
             packet_loss_marker(streams[config["stream_names"]["motionsense_hrv_accel_right"]]["stream_ids"],
-                               streams[config["stream_names"]["motionsense_hrv_accel_right"]]["name"], user_id,
+                               streams[config["stream_names"]["motionsense_hrv_accel_right"]]["name"], owner_id,
                                config["stream_names"]["motionsense_hrv_accel_right_packetloss_marker"], CC, config)
         if config["stream_names"]["motionsense_hrv_accel_left"] in streams:
             packet_loss_marker(streams[config["stream_names"]["motionsense_hrv_accel_left"]]["stream_ids"],
-                               streams[config["stream_names"]["motionsense_hrv_accel_left"]]["name"], user_id,
+                               streams[config["stream_names"]["motionsense_hrv_accel_left"]]["name"], owner_id,
                                config["stream_names"]["motionsense_hrv_accel_left_packetloss_marker"], CC, config)
         if config["stream_names"]["motionsense_hrv_gyro_right"] in streams:
             packet_loss_marker(streams[config["stream_names"]["motionsense_hrv_gyro_right"]]["stream_ids"],
-                               streams[config["stream_names"]["motionsense_hrv_gyro_right"]]["name"], user_id,
+                               streams[config["stream_names"]["motionsense_hrv_gyro_right"]]["name"], owner_id,
                                config["stream_names"]["motionsense_hrv_gyro_right_packetloss_marker"], CC, config)
 
         if config["stream_names"]["motionsense_hrv_gyro_left"] in streams:
             packet_loss_marker(streams[config["stream_names"]["motionsense_hrv_gyro_left"]]["stream_ids"],
-                               streams[config["stream_names"]["motionsense_hrv_gyro_left"]]["name"], user_id,
+                               streams[config["stream_names"]["motionsense_hrv_gyro_left"]]["name"], owner_id,
                                config["stream_names"]["motionsense_hrv_gyro_left_packetloss_marker"], CC, config)
 
         if config["stream_names"]["phone_screen_touch"] in streams:
             phone_screen_touch_marker(streams[config["stream_names"]["phone_screen_touch"]]["stream_ids"],
-                                      streams[config["stream_names"]["phone_screen_touch"]]["name"], user_id,
+                                      streams[config["stream_names"]["phone_screen_touch"]]["name"], owner_id,
                                       config["stream_names"]["phone_screen_touch_marker"], CC, config)
 
 
