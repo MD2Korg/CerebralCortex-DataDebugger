@@ -38,7 +38,7 @@ from core.util.window import merge_consective_windows, window
 from cerebralcortex.core.data_manager.raw.stream_handler import DataSet
 
 
-def mobile_app_availability_marker(raw_stream_ids: uuid, stream_name: str, owner_id, dd_stream_name, CC: CerebralCortex,
+def mobile_app_availability_marker(streams, stream_name: str, owner_id, CC: CerebralCortex,
                                    config: dict):
     """
     This algorithm uses phone battery percentages to decide whether mobile app was available or unavailable.
@@ -47,33 +47,37 @@ def mobile_app_availability_marker(raw_stream_ids: uuid, stream_name: str, owner
     :param CC:
     :param config:
     """
-    # using stream_id, data-diagnostic-stream-id, and owner id to generate a unique stream ID for battery-marker
-    app_availability_marker_stream_id = uuid.uuid3(uuid.NAMESPACE_DNS, str(
-        raw_stream_ids[0] + dd_stream_name + owner_id + "MOBILE APP AVAILABILITY MARKER"))
-    input_streams = [{"owner_id": owner_id, "id": raw_stream_ids, "name": stream_name}]
-    output_stream = {"id": app_availability_marker_stream_id, "name": dd_stream_name,
-                     "algo_type": config["algo_type"]["app_availability_marker"]}
-    metadata = get_metadata(dd_stream_name, input_streams, config)
+    if config["stream_names"]["phone_battery"] in streams:
+        raw_stream_ids = streams[config["stream_names"]["phone_battery"]]["stream_ids"]
+        dd_stream_name = config["stream_names"]["app_availability_marker"]
 
-    if isinstance(raw_stream_ids, list):
-        for raw_stream_id in raw_stream_ids:
+        # using stream_id, data-diagnostic-stream-id, and owner id to generate a unique stream ID for battery-marker
+        app_availability_marker_stream_id = uuid.uuid3(uuid.NAMESPACE_DNS, str(
+            raw_stream_ids[0] + dd_stream_name + owner_id + "MOBILE APP AVAILABILITY MARKER"))
+        input_streams = [{"owner_id": owner_id, "id": raw_stream_ids, "name": stream_name}]
+        output_stream = {"id": app_availability_marker_stream_id, "name": dd_stream_name,
+                         "algo_type": config["algo_type"]["app_availability_marker"]}
+        metadata = get_metadata(dd_stream_name, input_streams, config)
 
-            stream_days = CC.get_stream_days(raw_stream_id, app_availability_marker_stream_id, CC)
+        if isinstance(raw_stream_ids, list):
+            for raw_stream_id in raw_stream_ids:
 
-            for day in stream_days:
-                try:
-                    stream = CC.get_stream(raw_stream_id, day=day, data_type=DataSet.COMPLETE)
-                    if len(stream.data) > 0:
-                        windowed_data = window(stream.data, config['general']['window_size'], True)
-                        results = process_windows(windowed_data, config)
+                stream_days = CC.get_stream_days(raw_stream_id, app_availability_marker_stream_id, CC)
 
-                        merged_windows = merge_consective_windows(results)
-                        if len(merged_windows) > 0:
-                            store(merged_windows, input_streams, output_stream, metadata, CC, config)
+                for day in stream_days:
+                    try:
+                        stream = CC.get_stream(raw_stream_id, day=day, data_type=DataSet.COMPLETE)
+                        if len(stream.data) > 0:
+                            windowed_data = window(stream.data, config['general']['window_size'], True)
+                            results = process_windows(windowed_data, config)
 
-                except Exception as e:
-                    CC.logging.log("Error processing: owner-id: %s, stream-id: %s, stream-name: %s, day: %s. Error: "
-                                   %(str(owner_id), str(raw_stream_id), str(stream_name), str(day), str(e)))
+                            merged_windows = merge_consective_windows(results)
+                            if len(merged_windows) > 0:
+                                store(merged_windows, input_streams, output_stream, metadata, CC, config)
+
+                    except Exception as e:
+                        CC.logging.log("Error processing: owner-id: %s, stream-id: %s, stream-name: %s, day: %s. Error: "
+                                       %(str(owner_id), str(raw_stream_id), str(stream_name), str(day), str(e)))
 
 
 def process_windows(windowed_data: OrderedDict, config: dict) -> OrderedDict:

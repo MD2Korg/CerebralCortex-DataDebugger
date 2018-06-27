@@ -37,8 +37,7 @@ from core.util.window import merge_consective_windows, window
 from cerebralcortex.core.data_manager.raw.stream_handler import DataSet
 
 
-def sensor_availability(raw_stream_ids: uuid, stream_name: str, owner_id: uuid, dd_stream_name,
-                        phone_physical_activity, CC: CerebralCortex, config: dict):
+def sensor_availability(streams, wrist: str, owner_id: uuid, CC: CerebralCortex, config: dict):
     """
     Mark missing data as wireless disconnection if a participate walks away from phone or sensor
     :param raw_stream_id:
@@ -50,33 +49,46 @@ def sensor_availability(raw_stream_ids: uuid, stream_name: str, owner_id: uuid, 
     :param config:
     """
 
-    # using stream_id, data-diagnostic-stream-id, and owner id to generate a unique stream ID for battery-marker
-    wireless_marker_stream_id = uuid.uuid3(uuid.NAMESPACE_DNS, str(raw_stream_ids[0] + dd_stream_name + owner_id))
-    input_streams = [{"owner_id": owner_id, "id": raw_stream_ids, "name": stream_name}]
-    output_stream = {"id": wireless_marker_stream_id, "name": dd_stream_name,
-                     "algo_type": config["algo_type"]["sensor_unavailable_marker"]}
-    metadata = get_metadata(dd_stream_name, input_streams, config)
+    if config["stream_names"]["phone_physical_activity"] in streams:
+        phone_physical_activity = streams[config["stream_names"]["phone_physical_activity"]]["stream_ids"]
+    else:
+        phone_physical_activity = None
 
-    if isinstance(raw_stream_ids, list):
-        for raw_stream_id in raw_stream_ids:
-            stream_days = CC.get_stream_days(raw_stream_id, wireless_marker_stream_id, CC)
+    key0 = "motionsense_hrv_accel_"+wrist
+    key1 = "motionsense_hrv_"+wrist+"_wireless_marker"
 
-            for day in stream_days:
-                try:
-                    # load stream data to be diagnosed
-                    raw_stream = CC.get_stream(raw_stream_id, day=day, data_type=DataSet.COMPLETE)
-                    if len(raw_stream.data) > 0:
+    raw_stream_ids = streams[config["stream_names"][key0]]["stream_ids"],
+    stream_name = streams[config["stream_names"][key0]]["name"]
+    dd_stream_name = config["stream_names"][key1]
 
-                        windowed_data = window(raw_stream.data, config['general']['window_size'], True)
-                        results = process_windows(windowed_data, day, CC, phone_physical_activity, config)
-                        merged_windows = merge_consective_windows(results)
+    if config["stream_names"]["phone_physical_activity"] in streams:
+        # using stream_id, data-diagnostic-stream-id, and owner id to generate a unique stream ID for battery-marker
+        wireless_marker_stream_id = uuid.uuid3(uuid.NAMESPACE_DNS, str(raw_stream_ids[0] + dd_stream_name + owner_id))
+        input_streams = [{"owner_id": owner_id, "id": raw_stream_ids, "name": stream_name}]
+        output_stream = {"id": wireless_marker_stream_id, "name": dd_stream_name,
+                         "algo_type": config["algo_type"]["sensor_unavailable_marker"]}
+        metadata = get_metadata(dd_stream_name, input_streams, config)
 
-                        if len(merged_windows) > 0:
+        if isinstance(raw_stream_ids, list):
+            for raw_stream_id in raw_stream_ids:
+                stream_days = CC.get_stream_days(raw_stream_id, wireless_marker_stream_id, CC)
 
-                            store(merged_windows, input_streams, output_stream, metadata, CC, config)
-                except Exception as e:
-                    CC.logging.log("Error processing: owner-id: %s, stream-id: %s, stream-name: %s, day: %s. Error: "
-                                   %(str(owner_id), str(raw_stream_id), str(stream_name), str(day), str(e)))
+                for day in stream_days:
+                    try:
+                        # load stream data to be diagnosed
+                        raw_stream = CC.get_stream(raw_stream_id, day=day, data_type=DataSet.COMPLETE)
+                        if len(raw_stream.data) > 0:
+
+                            windowed_data = window(raw_stream.data, config['general']['window_size'], True)
+                            results = process_windows(windowed_data, day, CC, phone_physical_activity, config)
+                            merged_windows = merge_consective_windows(results)
+
+                            if len(merged_windows) > 0:
+
+                                store(merged_windows, input_streams, output_stream, metadata, CC, config)
+                    except Exception as e:
+                        CC.logging.log("Error processing: owner-id: %s, stream-id: %s, stream-name: %s, day: %s. Error: "
+                                       %(str(owner_id), str(raw_stream_id), str(stream_name), str(day), str(e)))
 
 
 def process_windows(windowed_data, day, CC, phone_physical_activity, config):
