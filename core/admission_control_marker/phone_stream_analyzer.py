@@ -257,6 +257,10 @@ class PhoneStreamsAnalyzer():
         return corrupt_data
 
 
+class GPSStreamsAnalyzer():
+    pass
+
+
 def analyze_user_day(userid, all_days, CC_CONFIG_FILEPATH):
     print(userid,all_days,datetime.now())
     try:
