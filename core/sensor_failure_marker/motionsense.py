@@ -33,11 +33,12 @@ from cerebralcortex.cerebralcortex import CerebralCortex
 from core.post_processing import get_execution_context, get_annotations
 from core.post_processing import store
 from core.util.window import merge_consective_windows, window
+from core.util.helper_methods import generate_dd_stream_uuid
 from cerebralcortex.core.datatypes.datapoint import DataPoint
 from cerebralcortex.core.data_manager.raw.stream_handler import DataSet
 
 
-def sensor_failure_marker(streams, wrist: str, owner_id: uuid, CC: CerebralCortex, config: dict):
+def sensor_failure_marker(all_streams, wrist: str, owner_id: uuid, CC: CerebralCortex, config: dict):
     """
     Label a window as packet-loss if received packets are less than the expected packets.
     All the labeled data (st, et, label) with its metadata are then stored in a datastore.
@@ -45,6 +46,7 @@ def sensor_failure_marker(streams, wrist: str, owner_id: uuid, CC: CerebralCorte
     :param CC_obj:
     :param config:
     """
+    marker_version = "0.0.1"
 
     key0 = "motionsense_hrv_"+wrist+"_attachment_marker"
     key1 = "motionsense_hrv_"+wrist+"_attachment_marker"
@@ -52,17 +54,16 @@ def sensor_failure_marker(streams, wrist: str, owner_id: uuid, CC: CerebralCorte
     key3 = "motionsense_hrv_gyro_"+wrist
     key4 = "motionsense_hrv_"+wrist+"_sensor_failure_marker"
 
-    stream_name = streams[config["stream_names"][key0]]["name"]
-    raw_stream_ids = streams[config["stream_names"][key1]]["stream_ids"]
-    mshrv_accel_id = streams[config["stream_names"][key2]]["stream_ids"]
-    mshrv_gyro_id = streams[config["stream_names"][key3]]["stream_ids"]
+    stream_name = all_streams[config["stream_names"][key0]]["name"]
+    raw_stream_ids = all_streams[config["stream_names"][key1]]["stream_ids"]
+    mshrv_accel_id = all_streams[config["stream_names"][key2]]["stream_ids"]
+    mshrv_gyro_id = all_streams[config["stream_names"][key3]]["stream_ids"]
     dd_stream_name = config["stream_names"][key4]
 
-    if config["stream_names"][key2] in streams:
+    if config["stream_names"][key2] in all_streams:
 
         # using stream_id, data-diagnostic-stream-id, and owner id to generate a unique stream ID for battery-marker
-        sensor_failure_stream_id = uuid.uuid3(uuid.NAMESPACE_DNS, str(
-            raw_stream_ids[0] + dd_stream_name + owner_id + "SENSOR FAILURE MARKER"))
+        sensor_failure_stream_id = generate_dd_stream_uuid(dd_stream_name, marker_version, owner_id, "SENSOR FAILURE MARKER")
         input_streams = [{"owner_id": owner_id, "id": raw_stream_ids,
                           "name": stream_name}]
         output_stream = {"id": sensor_failure_stream_id, "name": dd_stream_name,

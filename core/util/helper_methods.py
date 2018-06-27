@@ -123,3 +123,6 @@ def magnitude_autosense_v1(accel_x: float, accel_y: float, accel_z: float) -> li
         magnitudeList.append(magnitude)
 
     return magnitudeList
+
+def generate_dd_stream_uuid(dd_stream_name, marker_version, owner_id, marker_name):
+    return uuid.uuid3(uuid.NAMESPACE_DNS, str(dd_stream_name + marker_version + owner_id + marker_name))

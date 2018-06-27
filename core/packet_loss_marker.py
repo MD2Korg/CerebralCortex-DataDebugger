@@ -29,11 +29,12 @@ from collections import OrderedDict
 from cerebralcortex.cerebralcortex import CerebralCortex
 from core.post_processing import get_execution_context, get_annotations
 from core.post_processing import store
+from core.util.helper_methods import generate_dd_stream_uuid
 from core.util.window import merge_consective_windows, window
 from cerebralcortex.core.data_manager.raw.stream_handler import DataSet
 
 
-def packet_loss_marker(streams, wrist, sensor_type, owner_id: uuid, CC: CerebralCortex, config: dict):
+def packet_loss_marker(all_streams, wrist, sensor_type, owner_id: uuid, CC: CerebralCortex, config: dict):
     """
     Label a window as packet-loss if received packets are less than the expected packets.
     All the labeled data (st, et, label) with its metadata are then stored in a datastore.
@@ -41,16 +42,18 @@ def packet_loss_marker(streams, wrist, sensor_type, owner_id: uuid, CC: Cerebral
     :param CC_obj:
     :param config:
     """
+    marker_version = "0.0.1"
+
     key0 = "motionsense_hrv_"+sensor_type+"_"+wrist
     key1 = "motionsense_hrv_"+sensor_type+"_"+wrist+"_packetloss_marker"
 
-    raw_stream_ids = streams[config["stream_names"][key0]]["stream_ids"],
-    stream_name = streams[config["stream_names"][key0]]["name"], owner_id,
+    raw_stream_ids = all_streams[config["stream_names"][key0]]["stream_ids"],
+    stream_name = all_streams[config["stream_names"][key0]]["name"], owner_id,
     dd_stream_name = config["stream_names"][key1]
 
-    if config["stream_names"][key0] in streams:
+    if config["stream_names"][key0] in all_streams:
         # using stream_id, data-diagnostic-stream-id, and owner id to generate a unique stream ID for battery-marker
-        packetloss_marker_stream_id = uuid.uuid3(uuid.NAMESPACE_DNS, str(raw_stream_ids[0] + dd_stream_name + owner_id+"PACKET LOSS MARKER"))
+        packetloss_marker_stream_id = generate_dd_stream_uuid(dd_stream_name, marker_version, owner_id, "PACKET LOSS MARKER")
         input_streams = [{"owner_id": owner_id, "id": raw_stream_ids, "name": stream_name}]
         output_stream = {"id": packetloss_marker_stream_id, "name": dd_stream_name,
                          "algo_type": config["algo_type"]["packet_loss_marker"]}

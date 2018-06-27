@@ -34,10 +34,11 @@ from core.post_processing import get_execution_context, get_annotations
 from core.post_processing import store
 from core.util.helper_methods import magnitude_datapoints
 from core.util.window import merge_consective_windows, window
+from core.util.helper_methods import generate_dd_stream_uuid
 from cerebralcortex.core.data_manager.raw.stream_handler import DataSet
 
 
-def sensor_availability(streams, wrist: str, owner_id: uuid, CC: CerebralCortex, config: dict):
+def sensor_availability(all_streams, wrist: str, owner_id: uuid, CC: CerebralCortex, config: dict):
     """
     Mark missing data as wireless disconnection if a participate walks away from phone or sensor
     :param raw_stream_id:
@@ -48,22 +49,23 @@ def sensor_availability(streams, wrist: str, owner_id: uuid, CC: CerebralCortex,
     :param CC:
     :param config:
     """
+    marker_version = "0.0.1"
 
-    if config["stream_names"]["phone_physical_activity"] in streams:
-        phone_physical_activity = streams[config["stream_names"]["phone_physical_activity"]]["stream_ids"]
+    if config["stream_names"]["phone_physical_activity"] in all_streams:
+        phone_physical_activity = all_streams[config["stream_names"]["phone_physical_activity"]]["stream_ids"]
     else:
         phone_physical_activity = None
 
     key0 = "motionsense_hrv_accel_"+wrist
     key1 = "motionsense_hrv_"+wrist+"_wireless_marker"
 
-    raw_stream_ids = streams[config["stream_names"][key0]]["stream_ids"],
-    stream_name = streams[config["stream_names"][key0]]["name"]
+    raw_stream_ids = all_streams[config["stream_names"][key0]]["stream_ids"],
+    stream_name = all_streams[config["stream_names"][key0]]["name"]
     dd_stream_name = config["stream_names"][key1]
 
-    if config["stream_names"]["phone_physical_activity"] in streams:
+    if config["stream_names"]["phone_physical_activity"] in all_streams:
         # using stream_id, data-diagnostic-stream-id, and owner id to generate a unique stream ID for battery-marker
-        wireless_marker_stream_id = uuid.uuid3(uuid.NAMESPACE_DNS, str(raw_stream_ids[0] + dd_stream_name + owner_id))
+        wireless_marker_stream_id = generate_dd_stream_uuid(dd_stream_name, marker_version, owner_id, "WIRELESS DISCONNECTION MARKER")
         input_streams = [{"owner_id": owner_id, "id": raw_stream_ids, "name": stream_name}]
         output_stream = {"id": wireless_marker_stream_id, "name": dd_stream_name,
                          "algo_type": config["algo_type"]["sensor_unavailable_marker"]}
