@@ -41,6 +41,39 @@ import pickle
 from cerebralcortex.cerebralcortex import CerebralCortex
 from cerebralcortex.core.util.spark_helper import get_or_create_sc
 import pytz
+import ast
+
+from distutils.version import StrictVersion
+
+MIN_ACCL_VAL = -5.0
+MAX_ACCL_VAL = 5.0
+
+def get_latest_stream_id(user_id, stream_name, CC):                                                                                                                                                                                  
+    streamids = CC.get_stream_id(user_id, stream_name)  
+    
+    latest_stream_id = []                                                                                                                                                                                                              
+    latest_stream_version = None                                                                                                                                                                                                       
+    for stream in streamids:                                                                                                                                                                                                           
+        stream_metadata = CC.get_stream_metadata(stream['identifier'])                                                                                                                                                            
+        execution_context = stream_metadata[0]['execution_context']                                                                                                                                                                    
+        execution_context = ast.literal_eval(execution_context)                                                                                                                                                                        
+        stream_version = execution_context['algorithm']['version'] 
+        try:                                                                                                                                                                                                                           
+            stream_version = int(stream_version)                                                                                                                                                                                       
+            stream_version = str(stream_version) + '.0'                                                                                                                                                                                
+        except:                                                                                                                                                                                                                        
+            pass                                                                                                                                                                                                                       
+        stream_version = StrictVersion(stream_version)                                                                                                                                                                                 
+        if not latest_stream_version:                                                                                                                                                                                                  
+            latest_stream_id.append(stream)                                                                                                                                                                                            
+            latest_stream_version = stream_version                                                                                                                                                                                     
+        else:                                                                                                                                                                                                                          
+            if stream_version > latest_stream_version:                                                                                                                                                                                 
+                latest_stream_id = [stream]
+            elif stream_version == latest_stream_version:                                                                                                                                                                              
+                    latest_stream_id.append(stream)                                                                                                                                                                                        
+    return latest_stream_id
+
 
 def get_corrupt_data_count(userid, all_days, cc_config_path):
     stream_names = []
@@ -79,6 +112,13 @@ def get_corrupt_data_count(userid, all_days, cc_config_path):
     sms_type_stream_name = "CU_SMS_TYPE--edu.dartmouth.eureka_data_quality" 
     stream_names.append(sms_type_stream_name)
 
+    location_stream = 'LOCATION--org.md2k.phonesensor--PHONE_data_quality'
+    stream_names.append(location_stream)
+
+    geofence_list_stream = \
+    'GEOFENCE--LIST--org.md2k.phonesensor--PHONE_data_quality'
+    stream_names.append(geofence_list_stream)
+
     CC = CerebralCortex(cc_config_path)
 
     all_stream_quality = {}        
@@ -91,26 +131,45 @@ def get_corrupt_data_count(userid, all_days, cc_config_path):
         count += 1
         for strm in stream_names:
             if not strm in all_stream_quality:
-                all_stream_quality[strm] = [0, 0]
+                all_stream_quality[strm] = [0, 0, 0]
             
-            stream_ids = CC.get_stream_id(usr, strm)
+            stream_ids = get_latest_stream_id(usr, strm, CC)
                 
             strm_id = stream_ids[0]['identifier']
             stream_dps_count = 0
             stream_corrupt_dps_count = 0
+            stream_possible_accl_gyro_dps = 0
+
             for day in all_days:
                 ds = CC.get_stream(strm_id, usr, day)
                 if len(ds.data):
                     dp = ds.data[0]
                     num_day_dps = dp.sample[0]
                     num_day_corrupt_dps = len(dp.sample[1])
+                    num_possible_accl_sample = 0
+                    # check if the corrupted datapoints could be accl or gyro
+                    # samples
+                    if num_day_corrupt_dps:
+                        for corrupt_dp in dp.sample[1]:
+                            if type(corrupt_dp.sample) is list and len(corrupt_dp.sample) == 3:
+                                try:
+                                    if corrupt_dp.sample[0] >=  MIN_ACCL_VAL and corrupt_dp.sample[0] <= MAX_ACCL_VAL:
+                                        if corrupt_dp.sample[1] >=  MIN_ACCL_VAL and corrupt_dp.sample[1] <= MAX_ACCL_VAL:
+                                            if corrupt_dp.sample[2] >=  MIN_ACCL_VAL and corrupt_dp.sample[2] <= MAX_ACCL_VAL:
+                                                num_possible_accl_sample += 1
+                                except Exception as e:
+                                    print(corrupt_dp)
+                                    print(str(e))
+
                     stream_dps_count += num_day_dps
                     stream_corrupt_dps_count += num_day_corrupt_dps
+                    stream_possible_accl_gyro_dps += num_possible_accl_sample
                     
             #print('X'*50)
             #print(usr, strm, stream_dps_count, stream_corrupt_dps_count)
             all_stream_quality[strm][0] += stream_dps_count
             all_stream_quality[strm][1] += stream_corrupt_dps_count
+            all_stream_quality[strm][2] += stream_possible_accl_gyro_dps
         print(all_stream_quality)
     
         output_dir = '/tmp/corruption_count/'

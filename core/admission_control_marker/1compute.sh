@@ -48,9 +48,9 @@ if [ $SPARK_JOB == 'True' ]
         spark-submit --master $SPARK_MASTER \
                      --conf spark.ui.port=$SPARK_UI_PORT \
                      --conf spark.cores.max=$MAX_CORES \
-                     --conf spark.app.name='data_quality' \
+                     --conf spark.app.name='data_quality_analysis' \
                      --py-files $PY_FILES \
-                     phone_stream_analyzer.py
+                     input_stream_analyser.py
     else
         echo 'Executing single threaded'
         export PYTHONPATH=.:${CC_EGG}:$PYTHONPATH

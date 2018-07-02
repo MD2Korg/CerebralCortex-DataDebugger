@@ -43,7 +43,7 @@ import pytz
 
 # Below are the 'raw' ingested input streams that phone_features uses.
 phone_input_streams = {}
-"""
+
 call_stream_name = 'CU_CALL_DURATION--edu.dartmouth.eureka'
 call_stream_admission_control = lambda x: (type(x) is float and x >= 0)
 phone_input_streams[call_stream_name] = call_stream_admission_control
@@ -64,9 +64,11 @@ light_stream_name = 'AMBIENT_LIGHT--org.md2k.phonesensor--PHONE'
 light_stream_admission_control = lambda x: (type(x) is float and x >= 0)
 phone_input_streams[light_stream_name] = light_stream_admission_control
 
+"""
 appcategory_stream_name = "org.md2k.data_analysis.feature.phone.app_usage_category"
 appcategory_stream_admission_control = lambda x: (type(x) is list and len(x) == 4)
 phone_input_streams[appcategory_stream_name] = appcategory_stream_admission_control
+"""
 
 call_number_stream_name = "CU_CALL_NUMBER--edu.dartmouth.eureka"
 call_number_stream_admission_control = lambda x: (type(x) is str)
@@ -75,12 +77,10 @@ phone_input_streams[call_number_stream_name] = call_number_stream_admission_cont
 sms_number_stream_name = "CU_SMS_NUMBER--edu.dartmouth.eureka"
 sms_number_stream_admission_control = lambda x: (type(x) is str)
 phone_input_streams[sms_number_stream_name] = sms_number_stream_admission_control
-"""
 
 activity_stream_name = "ACTIVITY_TYPE--org.md2k.phonesensor--PHONE"
 activity_stream_admission_control = lambda x: (type(x) is list and len(x) == 2)
 phone_input_streams[activity_stream_name] = activity_stream_admission_control
-"""
 call_type_stream_name = "CU_CALL_TYPE--edu.dartmouth.eureka"
 call_type_stream_admission_control = lambda x: (type(x) is float)
 phone_input_streams[call_type_stream_name] = call_type_stream_admission_control
@@ -88,17 +88,25 @@ phone_input_streams[call_type_stream_name] = call_type_stream_admission_control
 sms_type_stream_name = "CU_SMS_TYPE--edu.dartmouth.eureka"
 sms_type_stream_admission_control = lambda x: (type(x) is float)
 phone_input_streams[sms_type_stream_name] = sms_type_stream_admission_control
-"""
+
+location_stream = 'LOCATION--org.md2k.phonesensor--PHONE'
+location_stream_admission_control =  lambda x: ( isinstance(x, list)
+                                                and len(x) == 6)
+phone_input_streams[location_stream] = location_stream_admission_control
+
+geofence_list_stream = 'GEOFENCE--LIST--org.md2k.phonesensor--PHONE'
+geofence_list_stream_admission_control = lambda x: (isinstance(x, str)
+                                                    and '#' in x)
+phone_input_streams[geofence_list_stream] = geofence_list_stream_admission_control
 
 
-
-class PhoneStreamsAnalyzer():
+class InputStreamsAnalyzer():
     """
     This class is responsible for computing features based on streams of data
     derived from the smartphone sensors.
     """
 
-    def get_day_data(self, userid, day, stream_name, localtime=True):
+    def get_day_data(self, userid, day, stream_name, localtime=False):
         """
         Return the filtered list of DataPoints according to the admission control provided
 
@@ -162,7 +170,7 @@ class PhoneStreamsAnalyzer():
                   "email":"nndugudi@memphis.edu"
                 }
               ],
-              "version":"0.0.1",
+              "version":"0.0.3",
               "description":"Analyzer for the phone input streams"
             }
           },
@@ -176,7 +184,8 @@ class PhoneStreamsAnalyzer():
                 current_date = datetime.strptime(day, date_format)
                 day_data = self.get_day_data(userid, day, phone_stream)
                 data_quality_analysis = []
-                if len(day_data): 
+                    
+                if len(day_data):
                     corrupt_data = \
                                 self.get_corrupt_data(day_data,
                                                              phone_input_streams[phone_stream])
@@ -197,12 +206,8 @@ class PhoneStreamsAnalyzer():
                                    sample=[0, []])
                     data_quality_analysis.append(dp)
                 
-                # TODO - store the stream
-                #mf  = open('phone_input_streams_data_quality.json','r')
-                #metadata = mf.read()
-                #mf.close()
                 metadata_json = json.loads(metadata)
-                metadata_name = phone_stream + '_data_quality'
+                metadata_name = phone_stream + '_corrupt_data'
                 output_stream_id = str(uuid.uuid3(uuid.NAMESPACE_DNS, str(
                       metadata_name + userid + str(metadata))))
                 input_streams = []
@@ -257,15 +262,12 @@ class PhoneStreamsAnalyzer():
         return corrupt_data
 
 
-class GPSStreamsAnalyzer():
-    pass
-
 
 def analyze_user_day(userid, all_days, CC_CONFIG_FILEPATH):
     print(userid,all_days,datetime.now())
     try:
-        psa = PhoneStreamsAnalyzer()
-        psa.analyze_user(userid, all_days, CC_CONFIG_FILEPATH)
+        isa = InputStreamsAnalyzer()
+        isa.analyze_user(userid, all_days, CC_CONFIG_FILEPATH)
     except Exception as e:
         print(e)
 
@@ -302,9 +304,8 @@ def main():
     print("Number of users ",len(userids))
     num_cores = 24
 
-
-
     useSpark = True
+    #useSpark = False
     if useSpark:
         spark_context = get_or_create_sc(type="sparkContext")
         parallelize_per_day = []
@@ -326,8 +327,9 @@ def main():
         except Exception as e:
             print(e)
     else:
-        analyze_user_day(userids[0],all_days[:2], 
-                                               CC_CONFIG_FILEPATH)
+        for usr in userids:
+            analyze_user_day(usr,all_days, 
+                             CC_CONFIG_FILEPATH)
 if __name__ == '__main__':
     main()
 
