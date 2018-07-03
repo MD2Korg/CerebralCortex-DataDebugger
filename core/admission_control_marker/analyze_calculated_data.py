@@ -78,45 +78,45 @@ def get_latest_stream_id(user_id, stream_name, CC):
 def get_corrupt_data_count(userid, all_days, cc_config_path):
     stream_names = []
 
-    sms_stream_name = 'CU_SMS_LENGTH--edu.dartmouth.eureka_data_quality'
+    sms_stream_name = 'CU_SMS_LENGTH--edu.dartmouth.eureka_corrupt_data'
     stream_names.append(sms_stream_name)
 
-    call_stream_name = 'CU_CALL_DURATION--edu.dartmouth.eureka_data_quality'
+    call_stream_name = 'CU_CALL_DURATION--edu.dartmouth.eureka_corrupt_data'
     stream_names.append(call_stream_name)
 
     proximity_stream_name = \
-    'PROXIMITY--org.md2k.phonesensor--PHONE_data_quality'
+    'PROXIMITY--org.md2k.phonesensor--PHONE_corrupt_data'
     stream_names.append(proximity_stream_name)
 
-    cu_appusage_stream_name = 'CU_APPUSAGE--edu.dartmouth.eureka_data_quality'
+    cu_appusage_stream_name = 'CU_APPUSAGE--edu.dartmouth.eureka_corrupt_data'
     stream_names.append(cu_appusage_stream_name)
 
     light_stream_name = \
-    'AMBIENT_LIGHT--org.md2k.phonesensor--PHONE_data_quality'
+    'AMBIENT_LIGHT--org.md2k.phonesensor--PHONE_corrupt_data'
     stream_names.append(light_stream_name)
 
     call_number_stream_name = \
-    "CU_CALL_NUMBER--edu.dartmouth.eureka_data_quality"
+    "CU_CALL_NUMBER--edu.dartmouth.eureka_corrupt_data"
     stream_names.append(call_number_stream_name)
 
-    sms_number_stream_name = "CU_SMS_NUMBER--edu.dartmouth.eureka_data_quality"
+    sms_number_stream_name = "CU_SMS_NUMBER--edu.dartmouth.eureka_corrupt_data"
     stream_names.append(sms_number_stream_name)
 
     activity_stream_name = \
-    "ACTIVITY_TYPE--org.md2k.phonesensor--PHONE_data_quality"
+    "ACTIVITY_TYPE--org.md2k.phonesensor--PHONE_corrupt_data"
     stream_names.append(activity_stream_name)
 
-    call_type_stream_name = "CU_CALL_TYPE--edu.dartmouth.eureka_data_quality"
+    call_type_stream_name = "CU_CALL_TYPE--edu.dartmouth.eureka_corrupt_data"
     stream_names.append(call_type_stream_name)
 
-    sms_type_stream_name = "CU_SMS_TYPE--edu.dartmouth.eureka_data_quality" 
+    sms_type_stream_name = "CU_SMS_TYPE--edu.dartmouth.eureka_corrupt_data" 
     stream_names.append(sms_type_stream_name)
 
-    location_stream = 'LOCATION--org.md2k.phonesensor--PHONE_data_quality'
+    location_stream = 'LOCATION--org.md2k.phonesensor--PHONE_corrupt_data'
     stream_names.append(location_stream)
 
     geofence_list_stream = \
-    'GEOFENCE--LIST--org.md2k.phonesensor--PHONE_data_quality'
+    'GEOFENCE--LIST--org.md2k.phonesensor--PHONE_corrupt_data'
     stream_names.append(geofence_list_stream)
 
     CC = CerebralCortex(cc_config_path)
