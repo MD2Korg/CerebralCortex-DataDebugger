@@ -29,18 +29,18 @@ from cerebralcortex.core.datatypes.datastream import DataStream
 
 stream_adm_control = {} # total number of columns that are expected
 
-stream_adm_control['CU_CALL_DURATION--edu.dartmouth.eureka'] = 3
-stream_adm_control['CU_SMS_LENGTH--edu.dartmouth.eureka'] = 3
-stream_adm_control['PROXIMITY--org.md2k.phonesensor--PHONE'] = 3
+stream_adm_control['CU_CALL_DURATION--edu.dartmouth.eureka'] = lambda x: (type(x) is float and x >= 0)
+stream_adm_control['CU_SMS_LENGTH--edu.dartmouth.eureka'] =  lambda x: (type(x) is float and x >= 0)
+stream_adm_control['PROXIMITY--org.md2k.phonesensor--PHONE'] = lambda x: (type(x) is float and x >= 0)
 stream_adm_control['CU_APPUSAGE--edu.dartmouth.eureka'] = lambda x: type(x) is str
-stream_adm_control['AMBIENT_LIGHT--org.md2k.phonesensor--PHONE'] = 3
-stream_adm_control['CU_CALL_NUMBER--edu.dartmouth.eureka'] = 3
-stream_adm_control['CU_SMS_NUMBER--edu.dartmouth.eureka'] = 3
-stream_adm_control['ACTIVITY_TYPE--org.md2k.phonesensor--PHONE'] = 4
-stream_adm_control['CU_CALL_TYPE--edu.dartmouth.eureka'] = 3
-stream_adm_control['CU_SMS_TYPE--edu.dartmouth.eureka'] = 3
-stream_adm_control['LOCATION--org.md2k.phonesensor--PHONE'] = 8
-stream_adm_control['GEOFENCE--LIST--org.md2k.phonesensor--PHONE'] = 3
+stream_adm_control['AMBIENT_LIGHT--org.md2k.phonesensor--PHONE'] = lambda x: (type(x) is float and x >= 0)
+stream_adm_control['CU_CALL_NUMBER--edu.dartmouth.eureka'] = lambda x: (type(x) is str)
+stream_adm_control['CU_SMS_NUMBER--edu.dartmouth.eureka'] = lambda x: (type(x) is str)
+stream_adm_control['ACTIVITY_TYPE--org.md2k.phonesensor--PHONE'] = lambda x:(type(x) is list and len(x) == 2) 
+stream_adm_control['CU_CALL_TYPE--edu.dartmouth.eureka'] = lambda x: (type(x) is float) 
+stream_adm_control['CU_SMS_TYPE--edu.dartmouth.eureka'] = lambda x: (type(x) is float)
+stream_adm_control['LOCATION--org.md2k.phonesensor--PHONE'] = lambda x: ( isinstance(x, list) and len(x) == 6)
+stream_adm_control['GEOFENCE--LIST--org.md2k.phonesensor--PHONE'] = lambda x: (isinstance(x, str) and '#' in x)
 
 
 
