@@ -27,6 +27,7 @@ import os
 from cerebralcortex.CerebralCortex import CerebralCortex
 from cerebralcortex.configuration import Configuration
 
+
 # create and load CerebralCortex object and configs
 configuration_file = os.path.join(os.path.dirname(__file__), '../../../cerebralcortex.yml')
 CC = CerebralCortex(configuration_file, master="local[*]", name="Data Diagnostic App", load_spark=False)

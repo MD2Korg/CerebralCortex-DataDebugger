@@ -27,41 +27,56 @@ import uuid
 from collections import OrderedDict
 
 from cerebralcortex.cerebralcortex import CerebralCortex
-from modules.mdebugger.post_processing import get_execution_context, get_annotations
-from modules.mdebugger.post_processing import store
-from modules.mdebugger.util import get_stream_days
-from modules.mdebugger.util import merge_consective_windows
-from core.signalprocessing.window import window
+from core.post_processing import get_execution_context, get_annotations
+from core.post_processing import store
+from core.util.window import merge_consective_windows, window
+from core.util.helper_methods import generate_dd_stream_uuid
 from cerebralcortex.core.data_manager.raw.stream_handler import DataSet
 
 
-def attachment_marker(raw_stream_id: uuid, stream_name: str, owner_id: uuid, dd_stream_name, CC: CerebralCortex,
-                      config: dict):
+def attachment_marker(all_streams, wrist, owner_id: uuid, CC: CerebralCortex, config: dict):
     """
     Label sensor data as sensor-on-body, sensor-off-body, or improper-attachment.
     All the labeled data (st, et, label) with its metadata are then stored in a datastore
 
     """
+    marker_version = "0.0.1"
+
     # TODO: quality streams could be multiple so find the one computed with CC
     # using stream_id, data-diagnostic-stream-id, and owner id to generate a unique stream ID for battery-marker
-    attachment_marker_stream_id = uuid.uuid3(uuid.NAMESPACE_DNS, str(raw_stream_id + dd_stream_name + owner_id+"ATTACHMENT MARKER"))
 
-    stream_days = get_stream_days(raw_stream_id, attachment_marker_stream_id, CC)
+    key0 = "motionsense_hrv_led_quality_"+wrist
+    key1 = "motionsense_hrv_"+wrist+"_attachment_marker"
+    raw_stream_ids = all_streams[config["stream_names"][key0]]["stream_ids"]
+    stream_name = all_streams[config["stream_names"][key0]]["name"]
+    dd_stream_name = config["stream_names"][key1]
 
-    for day in stream_days:
-        # load stream data to be diagnosed
-        raw_stream = CC.get_stream(raw_stream_id, day=day, data_type=DataSet.COMPLETE)
+    if config["stream_names"][key0] in all_streams:
 
-        if len(raw_stream.data) > 0:
-            windowed_data = window(raw_stream.data, config['general']['window_size'], True)
-            results = process_windows(windowed_data, config)
-            merged_windows = merge_consective_windows(results)
+        attachment_marker_stream_id = generate_dd_stream_uuid(dd_stream_name, marker_version, owner_id, "ATTACHMENT MARKER")
+        input_streams = [{"owner_id": owner_id, "id": raw_stream_ids, "name": stream_name}]
+        output_stream = {"id": attachment_marker_stream_id, "name": dd_stream_name,
+                         "algo_type": config["algo_type"]["attachment_marker"]}
+        metadata = get_metadata(dd_stream_name, input_streams, config)
 
-            input_streams = [{"owner_id": owner_id, "id": str(raw_stream_id), "name": stream_name}]
-            output_stream = {"id": attachment_marker_stream_id, "name": dd_stream_name,
-                             "algo_type": config["algo_type"]["attachment_marker"]}
-            metadata = get_metadata(dd_stream_name, input_streams, config)
-            store(merged_windows, input_streams, output_stream, metadata, CC, config)
+        if isinstance(raw_stream_ids, list):
+            for raw_stream_id in raw_stream_ids:
+                stream_days = CC.get_stream_days(raw_stream_id, attachment_marker_stream_id, CC)
+
+                for day in stream_days:
+                    try:
+                        # load stream data to be diagnosed
+                        raw_stream = CC.get_stream(raw_stream_id, day=day, data_type=DataSet.COMPLETE)
+
+                        if len(raw_stream.data) > 0:
+                            windowed_data = window(raw_stream.data, config['general']['window_size'], True)
+                            results = process_windows(windowed_data, config)
+                            merged_windows = merge_consective_windows(results)
+
+                            store(merged_windows, input_streams, output_stream, metadata, CC, config)
+                    except Exception as e:
+                        CC.logging.log("Error processing: owner-id: %s, stream-id: %s, stream-name: %s, day: %s. Error: "
+                                       %(str(owner_id), str(raw_stream_id), str(stream_name), str(day), str(e)))
 
 
 def process_windows(windowed_data: OrderedDict, config: dict) -> OrderedDict:

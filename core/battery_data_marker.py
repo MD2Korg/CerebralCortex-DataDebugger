@@ -30,15 +30,14 @@ from typing import List
 import numpy as np
 
 from cerebralcortex.cerebralcortex import CerebralCortex
-from modules.mdebugger.post_processing import get_execution_context, get_annotations
-from modules.mdebugger.post_processing import store
-from modules.mdebugger.util import get_stream_days
-from modules.mdebugger.util import merge_consective_windows
-from core.signalprocessing.window import window
+from core.post_processing import get_execution_context, get_annotations
+from core.post_processing import store
+from core.util.window import merge_consective_windows, window
+from core.util.helper_methods import generate_dd_stream_uuid
 from cerebralcortex.core.data_manager.raw.stream_handler import DataSet
 
 
-def battery_marker(raw_stream_id: uuid, stream_name: str, user_id, dd_stream_name, CC: CerebralCortex, config: dict):
+def battery_marker(all_streams, owner_id, stream_name, CC: CerebralCortex, config: dict):
     """
     This algorithm uses battery percentages to decide whether device was powered-off or battery was low.
     All the labeled data (st, et, label) with its metadata are then stored in a datastore.
@@ -46,30 +45,40 @@ def battery_marker(raw_stream_id: uuid, stream_name: str, user_id, dd_stream_nam
     :param CC:
     :param config:
     """
+    marker_version = "0.0.1"
 
-    try:
+    if stream_name in all_streams:
+        raw_stream_ids = all_streams[config["stream_names"]["phone_battery"]]["stream_ids"]
+        dd_stream_name = config["stream_names"]["phone_battery_marker"]
+
         # using stream_id, data-diagnostic-stream-id, and owner id to generate a unique stream ID for battery-marker
-        battery_marker_stream_id = uuid.uuid3(uuid.NAMESPACE_DNS, str(raw_stream_id+dd_stream_name + user_id +"BATTERY MARKER"))
+        battery_marker_stream_id = generate_dd_stream_uuid(dd_stream_name, marker_version, owner_id, "BATTERY MARKER")
 
-        stream_days = get_stream_days(raw_stream_id, battery_marker_stream_id, CC)
+        input_streams = [{"owner_id": owner_id, "id": raw_stream_ids, "name": stream_name}]
+        output_stream = {"id": battery_marker_stream_id, "name": dd_stream_name,
+                         "algo_type": config["algo_type"]["battery_marker"]}
+        metadata = get_metadata(dd_stream_name, input_streams, config)
 
-        for day in stream_days:
-            stream = CC.get_stream(raw_stream_id, day=day, data_type=DataSet.COMPLETE)
+        if isinstance(raw_stream_ids, list):
+            for raw_stream_id in raw_stream_ids:
 
-            if len(stream.data) > 0:
-                windowed_data = window(stream.data, config['general']['window_size'], True)
-                results = process_windows(windowed_data, stream_name, config)
+                stream_days = CC.get_stream_days(raw_stream_id, battery_marker_stream_id, CC)
 
-                merged_windows = merge_consective_windows(results)
-                if len(merged_windows) > 0:
-                    input_streams = [{"owner_id": user_id, "id": str(raw_stream_id), "name": stream_name}]
-                    output_stream = {"id": battery_marker_stream_id, "name": dd_stream_name,
-                                     "algo_type": config["algo_type"]["battery_marker"]}
-                    labelled_windows = mark_windows(battery_marker_stream_id, merged_windows, CC, config)
-                    metadata = get_metadata(dd_stream_name, input_streams, config)
-                    store(labelled_windows, input_streams, output_stream, metadata, CC, config)
-    except Exception as e:
-        print(e)
+                for day in stream_days:
+                    try:
+                        stream = CC.get_stream(raw_stream_id, day=day, data_type=DataSet.COMPLETE)
+
+                        if len(stream.data) > 0:
+                            windowed_data = window(stream.data, config['general']['window_size'], True)
+                            results = process_windows(windowed_data, stream_name, config)
+
+                            merged_windows = merge_consective_windows(results)
+                            if len(merged_windows) > 0:
+                                labelled_windows = mark_windows(battery_marker_stream_id, merged_windows, CC, config)
+                                store(labelled_windows, input_streams, output_stream, metadata, CC, config)
+                    except Exception as e:
+                        CC.logging.log("Error processing: owner-id: %s, stream-id: %s, stream-name: %s, day: %s. Error: "
+                                       % (str(owner_id), str(raw_stream_id), str(stream_name), str(day), str(e)))
 
 
 def process_windows(windowed_data: OrderedDict, stream_name: str, config: dict) -> OrderedDict:

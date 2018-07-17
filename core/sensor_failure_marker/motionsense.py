@@ -30,16 +30,15 @@ from typing import List
 import numpy as np
 
 from cerebralcortex.cerebralcortex import CerebralCortex
-from modules.mdebugger.post_processing import get_execution_context, get_annotations
-from modules.mdebugger.post_processing import store
-from modules.mdebugger.util import get_stream_days
-from modules.mdebugger.util import merge_consective_windows
+from core.post_processing import get_execution_context, get_annotations
+from core.post_processing import store
+from core.util.window import merge_consective_windows, window
+from core.util.helper_methods import generate_dd_stream_uuid
 from cerebralcortex.core.datatypes.datapoint import DataPoint
 from cerebralcortex.core.data_manager.raw.stream_handler import DataSet
 
 
-def sensor_failure_marker(attachment_marker_stream_id: uuid, mshrv_accel_id: uuid, mshrv_gyro_id: uuid, wrist: str,
-                          owner_id: uuid, dd_stream_name, CC: CerebralCortex, config: dict):
+def sensor_failure_marker(all_streams, wrist: str, owner_id: uuid, CC: CerebralCortex, config: dict):
     """
     Label a window as packet-loss if received packets are less than the expected packets.
     All the labeled data (st, et, label) with its metadata are then stored in a datastore.
@@ -47,52 +46,68 @@ def sensor_failure_marker(attachment_marker_stream_id: uuid, mshrv_accel_id: uui
     :param CC_obj:
     :param config:
     """
+    marker_version = "0.0.1"
 
-    # using stream_id, data-diagnostic-stream-id, and owner id to generate a unique stream ID for battery-marker
-    sensor_failure_stream_id = uuid.uuid3(uuid.NAMESPACE_DNS, str(
-        attachment_marker_stream_id + dd_stream_name + owner_id + "SENSOR FAILURE MARKER"))
+    key0 = "motionsense_hrv_"+wrist+"_attachment_marker"
+    key1 = "motionsense_hrv_"+wrist+"_attachment_marker"
+    key2 = "motionsense_hrv_accel_"+wrist
+    key3 = "motionsense_hrv_gyro_"+wrist
+    key4 = "motionsense_hrv_"+wrist+"_sensor_failure_marker"
 
-    stream_days = get_stream_days(attachment_marker_stream_id, sensor_failure_stream_id, CC)
+    stream_name = all_streams[config["stream_names"][key0]]["name"]
+    raw_stream_ids = all_streams[config["stream_names"][key1]]["stream_ids"]
+    mshrv_accel_id = all_streams[config["stream_names"][key2]]["stream_ids"]
+    mshrv_gyro_id = all_streams[config["stream_names"][key3]]["stream_ids"]
+    dd_stream_name = config["stream_names"][key4]
 
-    try:
-        for day in stream_days:
-            # load stream data to be diagnosed
-            attachment_marker_stream = CC.get_stream(attachment_marker_stream_id, day, data_type=DataSet.COMPLETE)
-            results = OrderedDict()
-            if attachment_marker_stream.data:
-                for marker_window in attachment_marker_stream.data:
-                    if "MOTIONSENSE-ON-BODY" in marker_window.sample:
-                        mshrv_accel_stream = CC.get_stream(mshrv_accel_id, day,
-                                                               start_time=marker_window.start_time,
-                                                               end_time=marker_window.end_time, data_type=DataSet.ONLY_DATA)
-                        mshrv_gyro_stream = CC.get_stream(mshrv_gyro_id, day,
-                                                              start_time=marker_window.start_time,
-                                                              end_time=marker_window.end_time, data_type=DataSet.ONLY_DATA)
+    if config["stream_names"][key2] in all_streams:
 
-                    results_accel = process_windows(mshrv_accel_stream, config)
-                    results_gyro = process_windows(mshrv_gyro_stream, config)
+        # using stream_id, data-diagnostic-stream-id, and owner id to generate a unique stream ID for battery-marker
+        sensor_failure_stream_id = generate_dd_stream_uuid(dd_stream_name, marker_version, owner_id, "SENSOR FAILURE MARKER")
+        input_streams = [{"owner_id": owner_id, "id": raw_stream_ids,
+                          "name": stream_name}]
+        output_stream = {"id": sensor_failure_stream_id, "name": dd_stream_name,
+                         "algo_type": config["algo_type"]["sensor_failure"]}
+        metadata = get_metadata(dd_stream_name, input_streams, config)
 
-                    key = marker_window.start_time, marker_window.end_time
 
-                    # if sensor failure period is more than 12 hours then mark it as a sensor failure
-                    if results_accel > 0 and results_gyro < 1:
-                        sample = "MOTIONSENE-HRV-" + str(wrist) + "ACCELEROMETER-FAILURE"
-                        results[key].append(DataPoint(marker_window.start_time, marker_window.end_time, sample))
-                    elif results_accel < 1 and results_gyro > 0:
-                        sample = "MOTIONSENE-HRV-" + str(wrist) + "GYRO-FAILURE"
-                        results[key].append(DataPoint(marker_window.start_time, marker_window.end_time, sample))
+        if isinstance(raw_stream_ids, list):
+            for raw_stream_id in raw_stream_ids:
+                stream_days = CC.get_stream_days(raw_stream_id, sensor_failure_stream_id, CC)
+                for day in stream_days:
+                    try:
+                        # load stream data to be diagnosed
+                        attachment_marker_stream = CC.get_stream(raw_stream_id, day, data_type=DataSet.COMPLETE)
+                        results = OrderedDict()
+                        if attachment_marker_stream.data:
+                            for marker_window in attachment_marker_stream.data:
+                                if "MOTIONSENSE-ON-BODY" in marker_window.sample:
+                                    mshrv_accel_stream = CC.get_stream(mshrv_accel_id, day,
+                                                                           start_time=marker_window.start_time,
+                                                                           end_time=marker_window.end_time, data_type=DataSet.ONLY_DATA)
+                                    mshrv_gyro_stream = CC.get_stream(mshrv_gyro_id, day,
+                                                                          start_time=marker_window.start_time,
+                                                                          end_time=marker_window.end_time, data_type=DataSet.ONLY_DATA)
 
-                    merged_windows = merge_consective_windows(results)
+                                results_accel = process_windows(mshrv_accel_stream, config)
+                                results_gyro = process_windows(mshrv_gyro_stream, config)
 
-                if len(results) > 0:
-                    input_streams = [{"owner_id": owner_id, "id": str(attachment_marker_stream_id),
-                                      "name": attachment_marker_stream.name}]
-                    output_stream = {"id": sensor_failure_stream_id, "name": dd_stream_name,
-                                     "algo_type": config["algo_type"]["sensor_failure"]}
-                    metadata = get_metadata(dd_stream_name, input_streams, config)
-                    store(merged_windows, input_streams, output_stream, metadata, CC, config)
-    except Exception as e:
-        print(e)
+                                key = marker_window.start_time, marker_window.end_time
+
+                                # if sensor failure period is more than 12 hours then mark it as a sensor failure
+                                if results_accel > 0 and results_gyro < 1:
+                                    sample = "MOTIONSENE-HRV-" + str(wrist) + "ACCELEROMETER-FAILURE"
+                                    results[key].append(DataPoint(marker_window.start_time, marker_window.end_time, sample))
+                                elif results_accel < 1 and results_gyro > 0:
+                                    sample = "MOTIONSENE-HRV-" + str(wrist) + "GYRO-FAILURE"
+                                    results[key].append(DataPoint(marker_window.start_time, marker_window.end_time, sample))
+
+                            if len(results) > 0:
+                                merged_windows = merge_consective_windows(results)
+                                store(merged_windows, input_streams, output_stream, metadata, CC, config)
+                    except Exception as e:
+                        CC.logging.log("Error processing: owner-id: %s, stream-id: %s, Algo-name: %s, day: %s. Error: "
+                                       % (str(owner_id), str(raw_stream_id), "sensor_failure_marker", str(day), str(e)))
 
 
 def process_windows(windowed_data: List, config: dict) -> int:
