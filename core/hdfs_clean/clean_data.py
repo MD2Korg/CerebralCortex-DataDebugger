@@ -25,6 +25,8 @@
 import pickle
 import os
 import gzip
+import pyarrow as pa
+import datetime
 from cerebralcortex.core.datatypes.datastream import DataStream
 
 stream_adm_control = {} # total number of columns that are expected
@@ -43,47 +45,77 @@ stream_adm_control['LOCATION--org.md2k.phonesensor--PHONE'] = lambda x: ( isinst
 stream_adm_control['GEOFENCE--LIST--org.md2k.phonesensor--PHONE'] = lambda x: (isinstance(x, str) and '#' in x)
 
 
-
+                                                                                                       
+date_format = '%Y%m%d'
+                                                               
 f = open('all_corrupt_files.txt','r')
 
+hdfs = pa.hdfs.connect('dagobah10dot.memphis.edu', 8020)
+
+output_dir = '/cerebralcortex/anand/'
+
+if not hdfs.exists(output_dir):
+    hdfs.mkdir(output_dir)
+    print('created outputdir', output_dir)
+
 for line in f:
+    uploaded_fp = gzip.open(line.split('\t')[1].strip())
+    start_date = None
+    end_date = None
+    for updp_line in uploaded_fp:
+        splts = updp_line.decode().split(',')
+        tm_stamp = int(splts[0])
+        if start_date is None:
+            start_date = datetime.datetime.fromtimestamp(tm_stamp/1000)
+        end_date = datetime.datetime.fromtimestamp(tm_stamp/1000)
+
+
     splits = line.split('/')
     splits = [x.strip() for x in splits]
     stream_name = splits[0]
     userid = splits[4]
     date = splits[5]
     streamid = splits[6]
-    
-    
-    files_dir = '00ab666c-afb8-476e-9872-6472b4e66b68/b2e7bd24-0e33-3f2f-bc0a-96d6d689c6d1/'#FIXME
-    filename = date + '.gz'
-    file_path = os.path.join(files_dir, filename)
+    all_days = []
+    while True:
+        all_days.append(start_date)
+        start_date += datetime.timedelta(days = 1)
+        if start_date > end_date:
+            break
 
-    if os.path.exists(file_path):
-        clean_datapoints = []
-        fp = gzip.open(file_path)
-        contents = fp.read()
-        fp.close()
-        data_points = pickle.loads(contents)
-        for dp in data_points:
-            sample = dp.sample
-            adm_controlf = stream_adm_control[stream_name]
-            if adm_controlf(sample):
-                clean_datapoints.append(dp)
-            else:
-                if isinstance(sample, list) and len(sample) == 1 and adm_controlf(sample[0]):
+    base_dir = '/cerebralcortex/data'
+    files_dir = os.path.join(base_dir, userid)
+    files_dir = os.path.join(files_dir, streamid)
+    
+    for corrupt_day in all_days:
+        filename = corrupt_day.strftime(date_format) + '.gz'
+        file_path = os.path.join(files_dir, filename)
+        if hdfs.exists(file_path):
+            clean_datapoints = []
+            
+            fp = hdfs.open(file_path)
+            contents = fp.read()
+            contents = gzip.decompress(contents)
+            fp.close()
+
+            data_points = pickle.loads(contents)
+            for dp in data_points:
+                sample = dp.sample
+                adm_controlf = stream_adm_control[stream_name]
+                if adm_controlf(sample):
                     clean_datapoints.append(dp)
+                else:
+                    if isinstance(sample, list) and len(sample) == 1 and adm_controlf(sample[0]):
+                        clean_datapoints.append(dp)
 
-        print('corrupt len',len(data_points))
-        print('cleaned len',len(clean_datapoints))
-        new_fp = gzip.open(file_path, 'wb')
-        new_fp.write(pickle.dumps(clean_datapoints))
-        new_fp.close()
-        # Test
-        test_fp = gzip.open(file_path)
-        cleaned_data = test_fp.read()
-        print('Num cleaned data points', len(pickle.loads(cleaned_data)))
+            out_path = file_path.replace('/cerebralcortex/data',
+                                         '/cerebralcortex/anand')
 
-    break
+            new_fp = hdfs.open(out_path, 'wb')
+            clean_contents = pickle.dumps(clean_datapoints)
+            clean_contents = gzip.compress(clean_contents)
+            new_fp.write(clean_contents)
+            new_fp.close()
+    break #FIXME
 
 f.close()
