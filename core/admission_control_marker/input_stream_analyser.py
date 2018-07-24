@@ -81,6 +81,7 @@ phone_input_streams[sms_number_stream_name] = sms_number_stream_admission_contro
 activity_stream_name = "ACTIVITY_TYPE--org.md2k.phonesensor--PHONE"
 activity_stream_admission_control = lambda x: (type(x) is list and len(x) == 2)
 phone_input_streams[activity_stream_name] = activity_stream_admission_control
+
 call_type_stream_name = "CU_CALL_TYPE--edu.dartmouth.eureka"
 call_type_stream_admission_control = lambda x: (type(x) is float)
 phone_input_streams[call_type_stream_name] = call_type_stream_admission_control
@@ -170,7 +171,7 @@ class InputStreamsAnalyzer():
                   "email":"nndugudi@memphis.edu"
                 }
               ],
-              "version":"0.0.3",
+              "version":"0.0.4",
               "description":"Analyzer for the phone input streams"
             }
           },
@@ -315,7 +316,8 @@ def main():
 
         shuffle(parallelize_per_day)
         print(len(parallelize_per_day))
-        rdd = spark_context.parallelize(parallelize_per_day, num_cores)
+        rdd = spark_context.parallelize(parallelize_per_day,
+                                        len(parallelize_per_day))
         try:
             results = rdd.map(
                 lambda user_day: analyze_user_day(user_day[0],

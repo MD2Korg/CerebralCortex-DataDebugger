@@ -129,6 +129,11 @@ def get_corrupt_data_count(userid, all_days, cc_config_path):
     for usr in userids[:1]:
         print('processing %d of %d' % (count,len(userids)))
         count += 1
+
+        output_per_day_dir = '/tmp/corruption_per_day/'
+        if not os.path.exists(output_per_day_dir):
+            os.mkdir(output_per_day_dir)
+        buf_day = ''
         for strm in stream_names:
             if not strm in all_stream_quality:
                 all_stream_quality[strm] = [0, 0, 0]
@@ -161,6 +166,10 @@ def get_corrupt_data_count(userid, all_days, cc_config_path):
                                     print(corrupt_dp)
                                     print(str(e))
 
+                    buf_day += str(usr) + '\t' + str(strm) + '\t' + str(day) +'\t' +\
+                                str(num_day_dps) + '\t' + str(num_day_corrupt_dps) + '\t' +\
+                                str(num_possible_accl_sample) + '\n'
+
                     stream_dps_count += num_day_dps
                     stream_corrupt_dps_count += num_day_corrupt_dps
                     stream_possible_accl_gyro_dps += num_possible_accl_sample
@@ -178,6 +187,10 @@ def get_corrupt_data_count(userid, all_days, cc_config_path):
         file_name = usr + '.pickle'
         f = open(os.path.join(output_dir,file_name),'wb')
         pickle.dump(all_stream_quality, f)
+        f.close()
+
+        f = open(os.path.join(output_per_day_dir,file_name),'w')
+        f.write(buf_day)
         f.close()
 
     return all_stream_quality
@@ -211,7 +224,7 @@ def main():
     #  20180401 20940a76-976b-446e-b173-89237835ae6b
 
     print("Number of users ",len(userids))
-    num_cores = 24
+    num_cores = 164
 
 
     useSpark = True
@@ -219,7 +232,7 @@ def main():
     if useSpark:
         spark_context = get_or_create_sc(type="sparkContext")
 
-        rdd = spark_context.parallelize(userids, num_cores)
+        rdd = spark_context.parallelize(userids, len(userids))
         try:
             results = rdd.map(
                 lambda user: get_corrupt_data_count(user,

@@ -30,12 +30,40 @@ import datetime
 from cerebralcortex.core.datatypes.datastream import DataStream
 
 
-hdfs = pa.hdfs.connect('dagobah10dot.memphis.edu', 8020)
 
-test_fp =\
-hdfs.open('/cerebralcortex/anand/00ab666c-afb8-476e-9872-6472b4e66b68/b2e7bd24-0e33-3f2f-bc0a-96d6d689c6d1/20171114.gz')
-cleaned_data = test_fp.read()
-cleaned_data = gzip.decompress(cleaned_data)
-test_fp.close()
+date_format = '%Y%m%d'
+                                                               
+f = open('all_corrupt_files.txt','r')
+processed_dirs = [] 
+for line in f:
+    file_path = line.split('\t')[1].strip()
+    dir_path = file_path[:-len('56f32620-ca10-41b0-ac36-4b55a7a826cf.gz')]
+    if dir_path not in processed_dirs:
+        processed_dirs.append(dir_path)
+    
+f.close()
+print(len(processed_dirs))
+
+
+
+"""
+hdfs = pa.hdfs.connect('dagobah10dot.memphis.edu', 8020)
+base_dir = '/cerebralcortex/anand1/'
+
+userids = hdfs.ls(base_dir)
+total_files = 0
+
+for user in userids:
+    user_dir = os.path.join(base_dir, user)
+    streamids = hdfs.ls(user_dir)
+    for stream_id in streamids:
+        stream_dir = os.path.join(user_dir, stream_id)
+        clean_files = hdfs.ls(stream_dir)
+        for cf in clean_files:
+            if '.gz' in cf:
+                total_files += 1
+
+
+print('DONE', total_files)
 hdfs.close()
-print('Num cleaned data points', len(pickle.loads(cleaned_data)))
+"""

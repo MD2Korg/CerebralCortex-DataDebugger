@@ -58,30 +58,51 @@ if not hdfs.exists(output_dir):
     hdfs.mkdir(output_dir)
     print('created outputdir', output_dir)
 
+processed_users = []
+count = 0
+
+st = datetime.datetime.now()
+
+total_new_files = 0
+
 for line in f:
-    uploaded_fp = gzip.open(line.split('\t')[1].strip())
-    start_date = None
-    end_date = None
-    for updp_line in uploaded_fp:
-        splts = updp_line.decode().split(',')
-        tm_stamp = int(splts[0])
-        if start_date is None:
-            start_date = datetime.datetime.fromtimestamp(tm_stamp/1000)
-        end_date = datetime.datetime.fromtimestamp(tm_stamp/1000)
+    try:
+        uploaded_fp = gzip.open(line.split('\t')[1].strip())
+        start_date = None
+        end_date = None
+        for updp_line in uploaded_fp:
+            splts = updp_line.decode().split(',')
+            tm_stamp = int(splts[0])
+            if start_date is None:
+                start_date = datetime.datetime.fromtimestamp(tm_stamp/1000)
+            end_date = datetime.datetime.fromtimestamp(tm_stamp/1000)
 
 
-    splits = line.split('/')
-    splits = [x.strip() for x in splits]
-    stream_name = splits[0]
-    userid = splits[4]
-    date = splits[5]
-    streamid = splits[6]
-    all_days = []
-    while True:
-        all_days.append(start_date)
-        start_date += datetime.timedelta(days = 1)
-        if start_date > end_date:
-            break
+        splits = line.split('/')
+        splits = [x.strip() for x in splits]
+        stream_name = splits[0]
+        userid = splits[4]
+        if userid not in processed_users:
+            processed_users.append(userid)
+            print('processing user ', count)
+            count += 1
+            """
+            if count == 9:
+                print('time taken for', count + 1, 'users ,', datetime.datetime.now() - st)
+                exit(1)
+            """
+
+        date = splits[5]
+        streamid = splits[6]
+        all_days = []
+        while True:
+            all_days.append(start_date)
+            start_date += datetime.timedelta(days = 1)
+            if start_date > end_date:
+                break
+    except Exception as e:
+        print('Error processing file', line)
+        #continue
 
     base_dir = '/cerebralcortex/data'
     files_dir = os.path.join(base_dir, userid)
@@ -109,13 +130,14 @@ for line in f:
                         clean_datapoints.append(dp)
 
             out_path = file_path.replace('/cerebralcortex/data',
-                                         '/cerebralcortex/anand')
+                                         output_dir)
 
             new_fp = hdfs.open(out_path, 'wb')
             clean_contents = pickle.dumps(clean_datapoints)
             clean_contents = gzip.compress(clean_contents)
             new_fp.write(clean_contents)
             new_fp.close()
-    break #FIXME
+            total_new_files += 1
 
 f.close()
+print('DONE', total_new_files)
